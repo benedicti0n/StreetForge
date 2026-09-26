@@ -96,7 +96,7 @@ export function WorldViewport() {
         <WebGLErrorBoundary>
           <Canvas
             camera={{
-              position: [12, 10, 12],
+              position: [14, 9, -12],
               fov: 50,
               near: 0.1,
               far: 2000,
