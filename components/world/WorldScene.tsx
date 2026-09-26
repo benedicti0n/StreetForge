@@ -7,11 +7,12 @@ import {
   type ReactNode,
   type RefObject,
 } from "react";
-import { VehicleModel } from "./vehicles/VehicleModel";
+import { PhysicsVehicle } from "./vehicles/PhysicsVehicle";
+import { type VehicleId } from "./vehicles/vehicleDefinitions";
 import {
-  VEHICLE_DEFINITIONS,
-  type VehicleId,
-} from "./vehicles/vehicleDefinitions";
+  type VehicleControlRef,
+  type VehicleTelemetry,
+} from "./vehicles/vehicleTypes";
 import { PhysicsWorld } from "./physics/PhysicsWorld";
 import { WorldCameraControls } from "./WorldCameraControls";
 
@@ -44,6 +45,8 @@ class VehicleLoadErrorBoundary extends Component<
 interface WorldSceneProps {
   controlsRef: RefObject<ControlsRef | null>;
   vehicles?: VehicleId[];
+  vehicleControls: Record<VehicleId, VehicleControlRef>;
+  playerTelemetryRef?: RefObject<VehicleTelemetry | null>;
   onVehicleLoaded?: () => void;
   onVehicleLoadFailed?: () => void;
 }
@@ -51,6 +54,8 @@ interface WorldSceneProps {
 export function WorldScene({
   controlsRef,
   vehicles = [],
+  vehicleControls,
+  playerTelemetryRef,
   onVehicleLoaded,
   onVehicleLoadFailed,
 }: WorldSceneProps) {
@@ -93,9 +98,13 @@ export function WorldScene({
         <VehicleLoadErrorBoundary onFail={onVehicleLoadFailed}>
           <Suspense fallback={null}>
             {vehicles.map((id) => (
-              <VehicleModel
+              <PhysicsVehicle
                 key={id}
-                definition={VEHICLE_DEFINITIONS[id]}
+                vehicle={id}
+                controls={vehicleControls[id]}
+                isPlayer={id === "race"}
+                autoResetBelowY={id === "race" ? -10 : undefined}
+                telemetryRef={id === "race" ? playerTelemetryRef : undefined}
                 onLoad={onVehicleLoaded}
               />
             ))}

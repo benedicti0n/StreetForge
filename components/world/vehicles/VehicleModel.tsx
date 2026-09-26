@@ -47,11 +47,7 @@ export function VehicleModel({ definition, onLoad }: VehicleModelProps) {
   }, [onLoad]);
 
   return (
-    <group
-      position={definition.worldPosition}
-      rotation={definition.visualRotation}
-      scale={definition.visualScale}
-    >
+    <group scale={definition.visualScale}>
       <group position={definition.visualOffset}>
         <primitive object={model} />
       </group>

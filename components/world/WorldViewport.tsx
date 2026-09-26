@@ -7,6 +7,7 @@ import {
   type ReactNode,
   useCallback,
   useEffect,
+  useMemo,
   useRef,
   useState,
 } from "react";
@@ -16,7 +17,13 @@ import {
   SCENE_VEHICLES,
   VEHICLE_DEFINITIONS,
   preloadVehicles,
+  type VehicleId,
 } from "./vehicles/vehicleDefinitions";
+import {
+  IDLE_CONTROLS,
+  type VehicleControlRef,
+  type VehicleTelemetry,
+} from "./vehicles/vehicleTypes";
 
 type ControlsRef = React.ElementRef<typeof OrbitControls>;
 
@@ -67,6 +74,17 @@ export function WorldViewport() {
     SCENE_VEHICLES.length,
   );
   const [vehicleLoadFailed, setVehicleLoadFailed] = useState(false);
+  const vehicleControlsRef = useMemo(
+    () =>
+      Object.fromEntries(
+        SCENE_VEHICLES.map((id) => [
+          id,
+          { current: { ...IDLE_CONTROLS } },
+        ]),
+      ) as Record<VehicleId, VehicleControlRef>,
+    [],
+  );
+  const playerTelemetryRef = useRef<VehicleTelemetry | null>(null);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -128,6 +146,8 @@ export function WorldViewport() {
             <WorldScene
               controlsRef={controlsRef}
               vehicles={SCENE_VEHICLES}
+              vehicleControls={vehicleControlsRef}
+              playerTelemetryRef={playerTelemetryRef}
               onVehicleLoaded={handleVehicleLoaded}
               onVehicleLoadFailed={handleVehicleLoadFailed}
             />
