@@ -7,7 +7,7 @@ import {
   type ReactNode,
   type RefObject,
 } from "react";
-import { PhysicsVehicle } from "./vehicles/PhysicsVehicle";
+import { PhysicsVehicle, type PhysicsVehicleHandle } from "./vehicles/PhysicsVehicle";
 import { type VehicleId } from "./vehicles/vehicleDefinitions";
 import {
   type VehicleControlRef,
@@ -46,7 +46,9 @@ interface WorldSceneProps {
   controlsRef: RefObject<ControlsRef | null>;
   vehicles?: VehicleId[];
   vehicleControls: Record<VehicleId, VehicleControlRef>;
+  playerVehicleRef?: RefObject<PhysicsVehicleHandle | null>;
   playerTelemetryRef?: RefObject<VehicleTelemetry | null>;
+  driveMode?: boolean;
   onVehicleLoaded?: () => void;
   onVehicleLoadFailed?: () => void;
 }
@@ -55,14 +57,16 @@ export function WorldScene({
   controlsRef,
   vehicles = [],
   vehicleControls,
+  playerVehicleRef,
   playerTelemetryRef,
+  driveMode = false,
   onVehicleLoaded,
   onVehicleLoadFailed,
 }: WorldSceneProps) {
   return (
     <>
       <color attach="background" args={["#101013"]} />
-      <WorldCameraControls controlsRef={controlsRef} />
+      <WorldCameraControls controlsRef={controlsRef} enabled={!driveMode} />
       <hemisphereLight args={["#c9ced6", "#17171a", 1.1]} />
       <directionalLight
         position={[20, 30, 10]}
@@ -100,6 +104,7 @@ export function WorldScene({
             {vehicles.map((id) => (
               <PhysicsVehicle
                 key={id}
+                ref={id === "race" ? playerVehicleRef : undefined}
                 vehicle={id}
                 controls={vehicleControls[id]}
                 isPlayer={id === "race"}

@@ -13,12 +13,14 @@ import {
 } from "react";
 import { WorldScene } from "./WorldScene";
 import { WorldViewportOverlay } from "./WorldViewportOverlay";
+import { useVehicleKeyboard } from "./controls/useVehicleKeyboard";
 import {
   SCENE_VEHICLES,
   VEHICLE_DEFINITIONS,
   preloadVehicles,
   type VehicleId,
 } from "./vehicles/vehicleDefinitions";
+import type { PhysicsVehicleHandle } from "./vehicles/PhysicsVehicle";
 import {
   IDLE_CONTROLS,
   type VehicleControlRef,
@@ -69,11 +71,14 @@ class WebGLErrorBoundary extends Component<
 
 export function WorldViewport() {
   const controlsRef = useRef<ControlsRef>(null);
+  const viewportRef = useRef<HTMLElement>(null);
+  const playerVehicleRef = useRef<PhysicsVehicleHandle | null>(null);
   const [webglAvailable, setWebglAvailable] = useState<boolean | null>(null);
   const [pendingVehicles, setPendingVehicles] = useState(
     SCENE_VEHICLES.length,
   );
   const [vehicleLoadFailed, setVehicleLoadFailed] = useState(false);
+  const [driveMode, setDriveMode] = useState(false);
   const vehicleControlsRef = useMemo(
     () =>
       Object.fromEntries(
@@ -85,6 +90,43 @@ export function WorldViewport() {
     [],
   );
   const playerTelemetryRef = useRef<VehicleTelemetry | null>(null);
+
+  const handleEnterDriveMode = useCallback(() => {
+    setDriveMode(true);
+  }, []);
+
+  const handleExitDriveMode = useCallback(() => {
+    setDriveMode(false);
+  }, []);
+
+  const handleResetPlayerVehicle = useCallback(() => {
+    playerVehicleRef.current?.reset();
+  }, []);
+
+  useEffect(() => {
+    if (!driveMode) {
+      return;
+    }
+    const handlePointerDown = (event: PointerEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (!target || !viewportRef.current) {
+        return;
+      }
+      if (!viewportRef.current.contains(target)) {
+        setDriveMode(false);
+      }
+    };
+    document.addEventListener("pointerdown", handlePointerDown, true);
+    return () =>
+      document.removeEventListener("pointerdown", handlePointerDown, true);
+  }, [driveMode]);
+
+  useVehicleKeyboard(
+    vehicleControlsRef.race,
+    driveMode,
+    handleResetPlayerVehicle,
+    handleExitDriveMode,
+  );
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -126,8 +168,10 @@ export function WorldViewport() {
 
   return (
     <section
+      ref={viewportRef}
       aria-label="3D world viewport"
       className="relative h-full min-h-0 w-full overflow-hidden bg-background"
+      onPointerDown={handleEnterDriveMode}
     >
       {webglAvailable === false ? (
         <ViewportUnavailable />
@@ -147,13 +191,18 @@ export function WorldViewport() {
               controlsRef={controlsRef}
               vehicles={SCENE_VEHICLES}
               vehicleControls={vehicleControlsRef}
+              playerVehicleRef={playerVehicleRef}
               playerTelemetryRef={playerTelemetryRef}
+              driveMode={driveMode}
               onVehicleLoaded={handleVehicleLoaded}
               onVehicleLoadFailed={handleVehicleLoadFailed}
             />
           </Canvas>
           <WorldViewportOverlay
             onResetView={handleResetView}
+            driveMode={driveMode}
+            onEnterDriveMode={handleEnterDriveMode}
+            onExitDriveMode={handleExitDriveMode}
             loadingVehicles={pendingVehicles > 0}
             vehicleLoadFailed={vehicleLoadFailed}
           />

@@ -88,7 +88,7 @@ export const PhysicsVehicle = forwardRef<
       controller.addWheel(
         new Vector3(position[0], position[1], position[2]),
         new Vector3(0, -1, 0),
-        new Vector3(1, 0, 0),
+        new Vector3(-1, 0, 0),
         physics.suspensionRestLength,
         physics.wheelRadius,
       );
@@ -257,6 +257,12 @@ export const PhysicsVehicle = forwardRef<
     }
   });
 
+  const chassisVolume =
+    physics.chassisHalfExtents[0] * 2 *
+    physics.chassisHalfExtents[1] * 2 *
+    physics.chassisHalfExtents[2] * 2;
+  const chassisDensity = physics.mass / chassisVolume;
+
   return (
     <RigidBody
       ref={rigidBodyRef}
@@ -264,13 +270,13 @@ export const PhysicsVehicle = forwardRef<
       position={definition.worldPosition}
       rotation={definition.visualRotation}
       colliders={false}
-      mass={physics.mass}
       linearDamping={0.02}
       angularDamping={0.35}
       canSleep={!isPlayer}
     >
       <CuboidCollider
         args={physics.chassisHalfExtents}
+        density={chassisDensity}
         friction={0.6}
         restitution={0.12}
         onCollisionEnter={handleCollision}

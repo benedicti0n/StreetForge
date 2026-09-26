@@ -7,8 +7,10 @@ type ControlsRef = React.ElementRef<typeof OrbitControls>;
 
 export function WorldCameraControls({
   controlsRef,
+  enabled = true,
 }: {
   controlsRef: RefObject<ControlsRef | null>;
+  enabled?: boolean;
 }) {
   useEffect(() => {
     controlsRef.current?.saveState();
@@ -18,6 +20,7 @@ export function WorldCameraControls({
     <OrbitControls
       ref={controlsRef}
       makeDefault
+      enabled={enabled}
       enableDamping
       dampingFactor={0.08}
       rotateSpeed={0.6}
