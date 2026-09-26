@@ -150,7 +150,7 @@ export const MapEditor = forwardRef<MapEditorHandle, MapEditorProps>(
                 <div
                   role="status"
                   aria-label="Loading map editor"
-                  className="size-8 animate-spin rounded-full border-2 border-edge border-t-accent"
+                  className="size-8 animate-spin rounded-full border-2 border-edge border-t-accent motion-reduce:animate-none"
                 />
                 <p className="text-xs uppercase tracking-[0.3em] text-zinc-500">
                   Loading Map Editor
