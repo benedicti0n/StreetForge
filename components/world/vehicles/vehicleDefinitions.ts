@@ -35,7 +35,7 @@ export const VEHICLE_DEFINITIONS: Record<VehicleId, VehicleDefinition> = {
   },
 };
 
-export const SCENE_VEHICLES: VehicleId[] = ["race"];
+export const SCENE_VEHICLES: VehicleId[] = ["race", "police"];
 
 export function preloadVehicles(): void {
   for (const definition of Object.values(VEHICLE_DEFINITIONS)) {

@@ -27,7 +27,7 @@ export function WorldCameraControls({
       maxDistance={200}
       minPolarAngle={0.05}
       maxPolarAngle={Math.PI / 2 - 0.05}
-      target={[0, 1, 8]}
+      target={[0, 0.9, 7]}
     />
   );
 }
