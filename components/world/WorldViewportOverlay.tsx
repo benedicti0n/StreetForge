@@ -2,10 +2,12 @@
 
 interface WorldViewportOverlayProps {
   onResetView: () => void;
+  loadingVehicles?: boolean;
 }
 
 export function WorldViewportOverlay({
   onResetView,
+  loadingVehicles = false,
 }: WorldViewportOverlayProps) {
   return (
     <div className="pointer-events-none absolute inset-0 z-10 flex flex-col justify-between p-3">
@@ -27,9 +29,16 @@ export function WorldViewportOverlay({
           Reset View
         </button>
       </div>
-      <p className="text-[10px] uppercase tracking-[0.2em] text-zinc-600">
-        Orbit &bull; Pan &bull; Zoom
-      </p>
+      <div className="flex items-center justify-between">
+        <p className="text-[10px] uppercase tracking-[0.2em] text-zinc-600">
+          Orbit &bull; Pan &bull; Zoom
+        </p>
+        {loadingVehicles && (
+          <p className="text-[10px] uppercase tracking-[0.2em] text-zinc-500">
+            Loading vehicles&hellip;
+          </p>
+        )}
+      </div>
     </div>
   );
 }

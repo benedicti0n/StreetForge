@@ -12,6 +12,10 @@ import {
 } from "react";
 import { WorldScene } from "./WorldScene";
 import { WorldViewportOverlay } from "./WorldViewportOverlay";
+import {
+  SCENE_VEHICLES,
+  preloadVehicles,
+} from "./vehicles/vehicleDefinitions";
 
 type ControlsRef = React.ElementRef<typeof OrbitControls>;
 
@@ -58,6 +62,9 @@ class WebGLErrorBoundary extends Component<
 export function WorldViewport() {
   const controlsRef = useRef<ControlsRef>(null);
   const [webglAvailable, setWebglAvailable] = useState<boolean | null>(null);
+  const [pendingVehicles, setPendingVehicles] = useState(
+    SCENE_VEHICLES.length,
+  );
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -66,8 +73,16 @@ export function WorldViewport() {
     return () => window.clearTimeout(timer);
   }, []);
 
+  useEffect(() => {
+    preloadVehicles();
+  }, []);
+
   const handleResetView = useCallback(() => {
     controlsRef.current?.reset();
+  }, []);
+
+  const handleVehicleLoaded = useCallback(() => {
+    setPendingVehicles((count) => Math.max(0, count - 1));
   }, []);
 
   return (
@@ -89,9 +104,16 @@ export function WorldViewport() {
             dpr={[1, 2]}
             gl={{ antialias: true }}
           >
-            <WorldScene controlsRef={controlsRef} />
+            <WorldScene
+              controlsRef={controlsRef}
+              vehicles={SCENE_VEHICLES}
+              onVehicleLoaded={handleVehicleLoaded}
+            />
           </Canvas>
-          <WorldViewportOverlay onResetView={handleResetView} />
+          <WorldViewportOverlay
+            onResetView={handleResetView}
+            loadingVehicles={pendingVehicles > 0}
+          />
         </WebGLErrorBoundary>
       )}
     </section>

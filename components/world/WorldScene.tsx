@@ -1,18 +1,29 @@
 "use client";
 
 import { Grid, OrbitControls } from "@react-three/drei";
-import type { RefObject } from "react";
+import { Suspense, type RefObject } from "react";
+import { VehicleModel } from "./vehicles/VehicleModel";
+import {
+  VEHICLE_DEFINITIONS,
+  type VehicleId,
+} from "./vehicles/vehicleDefinitions";
 import { WorldCameraControls } from "./WorldCameraControls";
 
 type ControlsRef = React.ElementRef<typeof OrbitControls>;
 
 export const WORLD_GROUND_SIZE = 100;
 
+interface WorldSceneProps {
+  controlsRef: RefObject<ControlsRef | null>;
+  vehicles?: VehicleId[];
+  onVehicleLoaded?: () => void;
+}
+
 export function WorldScene({
   controlsRef,
-}: {
-  controlsRef: RefObject<ControlsRef | null>;
-}) {
+  vehicles = [],
+  onVehicleLoaded,
+}: WorldSceneProps) {
   return (
     <>
       <color attach="background" args={["#101013"]} />
@@ -36,6 +47,15 @@ export function WorldScene({
         infiniteGrid
         followCamera={false}
       />
+      <Suspense fallback={null}>
+        {vehicles.map((id) => (
+          <VehicleModel
+            key={id}
+            definition={VEHICLE_DEFINITIONS[id]}
+            onLoad={onVehicleLoaded}
+          />
+        ))}
+      </Suspense>
     </>
   );
 }
