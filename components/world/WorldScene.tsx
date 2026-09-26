@@ -1,7 +1,12 @@
 "use client";
 
 import { Grid, OrbitControls } from "@react-three/drei";
-import { Suspense, type RefObject } from "react";
+import {
+  Component,
+  Suspense,
+  type ReactNode,
+  type RefObject,
+} from "react";
 import { VehicleModel } from "./vehicles/VehicleModel";
 import {
   VEHICLE_DEFINITIONS,
@@ -13,16 +18,40 @@ type ControlsRef = React.ElementRef<typeof OrbitControls>;
 
 export const WORLD_GROUND_SIZE = 100;
 
+class VehicleLoadErrorBoundary extends Component<
+  { children: ReactNode; onFail?: () => void },
+  { failed: boolean }
+> {
+  state = { failed: false };
+
+  static getDerivedStateFromError() {
+    return { failed: true };
+  }
+
+  componentDidCatch() {
+    this.props.onFail?.();
+  }
+
+  render() {
+    if (this.state.failed) {
+      return null;
+    }
+    return this.props.children;
+  }
+}
+
 interface WorldSceneProps {
   controlsRef: RefObject<ControlsRef | null>;
   vehicles?: VehicleId[];
   onVehicleLoaded?: () => void;
+  onVehicleLoadFailed?: () => void;
 }
 
 export function WorldScene({
   controlsRef,
   vehicles = [],
   onVehicleLoaded,
+  onVehicleLoadFailed,
 }: WorldSceneProps) {
   return (
     <>
@@ -59,15 +88,17 @@ export function WorldScene({
         infiniteGrid
         followCamera={false}
       />
-      <Suspense fallback={null}>
-        {vehicles.map((id) => (
-          <VehicleModel
-            key={id}
-            definition={VEHICLE_DEFINITIONS[id]}
-            onLoad={onVehicleLoaded}
-          />
-        ))}
-      </Suspense>
+      <VehicleLoadErrorBoundary onFail={onVehicleLoadFailed}>
+        <Suspense fallback={null}>
+          {vehicles.map((id) => (
+            <VehicleModel
+              key={id}
+              definition={VEHICLE_DEFINITIONS[id]}
+              onLoad={onVehicleLoaded}
+            />
+          ))}
+        </Suspense>
+      </VehicleLoadErrorBoundary>
     </>
   );
 }

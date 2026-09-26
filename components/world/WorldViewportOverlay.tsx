@@ -3,11 +3,13 @@
 interface WorldViewportOverlayProps {
   onResetView: () => void;
   loadingVehicles?: boolean;
+  vehicleLoadFailed?: boolean;
 }
 
 export function WorldViewportOverlay({
   onResetView,
   loadingVehicles = false,
+  vehicleLoadFailed = false,
 }: WorldViewportOverlayProps) {
   return (
     <div className="pointer-events-none absolute inset-0 z-10 flex flex-col justify-between p-3">
@@ -33,11 +35,15 @@ export function WorldViewportOverlay({
         <p className="text-[10px] uppercase tracking-[0.2em] text-zinc-600">
           Orbit &bull; Pan &bull; Zoom
         </p>
-        {loadingVehicles && (
+        {vehicleLoadFailed ? (
+          <p className="text-[10px] uppercase tracking-[0.2em] text-red-400/90">
+            Vehicle models failed to load
+          </p>
+        ) : loadingVehicles ? (
           <p className="text-[10px] uppercase tracking-[0.2em] text-zinc-500">
             Loading vehicles&hellip;
           </p>
-        )}
+        ) : null}
       </div>
     </div>
   );

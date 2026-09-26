@@ -14,6 +14,7 @@ import { WorldScene } from "./WorldScene";
 import { WorldViewportOverlay } from "./WorldViewportOverlay";
 import {
   SCENE_VEHICLES,
+  VEHICLE_DEFINITIONS,
   preloadVehicles,
 } from "./vehicles/vehicleDefinitions";
 
@@ -65,6 +66,7 @@ export function WorldViewport() {
   const [pendingVehicles, setPendingVehicles] = useState(
     SCENE_VEHICLES.length,
   );
+  const [vehicleLoadFailed, setVehicleLoadFailed] = useState(false);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -77,12 +79,31 @@ export function WorldViewport() {
     preloadVehicles();
   }, []);
 
+  useEffect(() => {
+    const handleWindowError = (event: ErrorEvent) => {
+      const message = event.message ?? "";
+      const isVehicleAssetError = Object.values(VEHICLE_DEFINITIONS).some(
+        (definition) => message.includes(definition.modelPath),
+      );
+      if (isVehicleAssetError) {
+        event.preventDefault();
+      }
+    };
+    window.addEventListener("error", handleWindowError);
+    return () => window.removeEventListener("error", handleWindowError);
+  }, []);
+
   const handleResetView = useCallback(() => {
     controlsRef.current?.reset();
   }, []);
 
   const handleVehicleLoaded = useCallback(() => {
     setPendingVehicles((count) => Math.max(0, count - 1));
+  }, []);
+
+  const handleVehicleLoadFailed = useCallback(() => {
+    setVehicleLoadFailed(true);
+    setPendingVehicles(0);
   }, []);
 
   return (
@@ -108,11 +129,13 @@ export function WorldViewport() {
               controlsRef={controlsRef}
               vehicles={SCENE_VEHICLES}
               onVehicleLoaded={handleVehicleLoaded}
+              onVehicleLoadFailed={handleVehicleLoadFailed}
             />
           </Canvas>
           <WorldViewportOverlay
             onResetView={handleResetView}
             loadingVehicles={pendingVehicles > 0}
+            vehicleLoadFailed={vehicleLoadFailed}
           />
         </WebGLErrorBoundary>
       )}
