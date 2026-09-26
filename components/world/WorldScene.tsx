@@ -1,13 +1,22 @@
 "use client";
 
-import { Grid } from "@react-three/drei";
+import { Grid, OrbitControls } from "@react-three/drei";
+import type { RefObject } from "react";
+import { WorldCameraControls } from "./WorldCameraControls";
+
+type ControlsRef = React.ElementRef<typeof OrbitControls>;
 
 export const WORLD_GROUND_SIZE = 100;
 
-export function WorldScene() {
+export function WorldScene({
+  controlsRef,
+}: {
+  controlsRef: RefObject<ControlsRef | null>;
+}) {
   return (
     <>
       <color attach="background" args={["#101013"]} />
+      <WorldCameraControls controlsRef={controlsRef} />
       <hemisphereLight args={["#c9ced6", "#17171a", 0.55]} />
       <directionalLight position={[20, 30, 10]} intensity={1.4} />
       <mesh rotation-x={-Math.PI / 2} position={[0, 0, 0]}>
