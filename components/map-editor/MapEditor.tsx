@@ -20,6 +20,12 @@ export interface MapEditorHandle {
   reset(): void;
 }
 
+export type MapEditorStatus = "loading" | "ready" | "error";
+
+interface MapEditorProps {
+  onStatusChange?: (status: MapEditorStatus) => void;
+}
+
 interface MapEditorFeatures {
   ai?: boolean;
   imageEditor?: {
@@ -57,99 +63,103 @@ const MAP_EDITOR_OPTIONS: MapEditorOptions = {
   },
 };
 
-export const MapEditor = forwardRef<MapEditorHandle>(function MapEditor(
-  _props,
-  ref,
-) {
-  const [image, setImage] = useState<string | null>(null);
-  const [status, setStatus] = useState<"loading" | "ready" | "error">(
-    "loading",
-  );
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [mountKey, setMountKey] = useState(0);
-  const editorRef = useRef<ImageEditorRef>(null);
+export const MapEditor = forwardRef<MapEditorHandle, MapEditorProps>(
+  function MapEditor({ onStatusChange }, ref) {
+    const [image, setImage] = useState<string | null>(null);
+    const [status, setStatus] = useState<MapEditorStatus>("loading");
+    const [errorMessage, setErrorMessage] = useState<string | null>(null);
+    const [mountKey, setMountKey] = useState(0);
+    const editorRef = useRef<ImageEditorRef>(null);
 
-  useEffect(() => {
-    setImage(createBlankMapDataUrl());
-    setStatus("loading");
-  }, []);
+    useEffect(() => {
+      setImage(createBlankMapDataUrl());
+      setStatus("loading");
+    }, []);
 
-  const handleLoad = useCallback(() => {
-    setStatus("ready");
-    setErrorMessage(null);
-  }, []);
+    useEffect(() => {
+      onStatusChange?.(status);
+    }, [status, onStatusChange]);
 
-  const handleError = useCallback((error: Error) => {
-    setErrorMessage(error.message || "The map editor failed to initialize.");
-    setStatus("error");
-  }, []);
+    const handleLoad = useCallback(() => {
+      setStatus("ready");
+      setErrorMessage(null);
+    }, []);
 
-  const handleLoadError = useCallback(() => {
-    setErrorMessage("The blank map could not be loaded into the editor.");
-    setStatus("error");
-  }, []);
+    const handleError = useCallback((error: Error) => {
+      setErrorMessage(error.message || "The map editor failed to initialize.");
+      setStatus("error");
+    }, []);
 
-  const handleRetry = useCallback(() => {
-    setStatus("loading");
-    setErrorMessage(null);
-    setMountKey((key) => key + 1);
-  }, []);
+    const handleLoadError = useCallback(() => {
+      setErrorMessage("The blank map could not be loaded into the editor.");
+      setStatus("error");
+    }, []);
 
-  useImperativeHandle(
-    ref,
-    () => ({
-      getImage: () => editorRef.current?.editor?.getImage() ?? null,
-      hasChanges: () => editorRef.current?.editor?.hasChanges() ?? false,
-      reset: () => {
-        setImage(createBlankMapDataUrl());
-        setStatus("loading");
-      },
-    }),
-    [],
-  );
+    const handleRetry = useCallback(() => {
+      setStatus("loading");
+      setErrorMessage(null);
+      setMountKey((key) => key + 1);
+    }, []);
 
-  return (
-    <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
-      {image !== null && (
-        <ImageEditor
-          key={mountKey}
-          ref={editorRef}
-          image={image}
-          options={MAP_EDITOR_OPTIONS}
-          minHeight={0}
-          style={{ flex: 1, minWidth: 0 }}
-          onLoad={handleLoad}
-          onError={handleError}
-          onLoadError={handleLoadError}
-        />
-      )}
-      {status !== "ready" && (
-        <div className="absolute inset-0 z-10 flex items-center justify-center bg-background">
-          {status === "error" ? (
-            <div className="flex max-w-xs flex-col items-center gap-4 text-center">
-              <p className="text-sm text-zinc-300">{errorMessage}</p>
-              <button
-                type="button"
-                onClick={handleRetry}
-                className="rounded-md border border-edge bg-panel-raised px-4 py-2 text-xs font-medium text-zinc-200 transition-colors hover:border-zinc-600 hover:bg-zinc-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
-              >
-                Retry
-              </button>
-            </div>
-          ) : (
-            <div className="flex flex-col items-center gap-3">
-              <div
-                role="status"
-                aria-label="Loading map editor"
-                className="size-8 animate-spin rounded-full border-2 border-edge border-t-accent"
-              />
-              <p className="text-xs uppercase tracking-[0.3em] text-zinc-500">
-                Loading Map Editor
-              </p>
-            </div>
-          )}
-        </div>
-      )}
-    </div>
-  );
-});
+    useImperativeHandle(
+      ref,
+      () => ({
+        getImage: () => editorRef.current?.editor?.getImage() ?? null,
+        hasChanges: () => editorRef.current?.editor?.hasChanges() ?? false,
+        reset: () => {
+          const instance = editorRef.current?.editor;
+          if (!instance) {
+            return;
+          }
+          void instance.reset(createBlankMapDataUrl());
+        },
+      }),
+      [],
+    );
+
+    return (
+      <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
+        {image !== null && (
+          <ImageEditor
+            key={mountKey}
+            ref={editorRef}
+            image={image}
+            options={MAP_EDITOR_OPTIONS}
+            minHeight={0}
+            style={{ flex: 1, minWidth: 0 }}
+            onLoad={handleLoad}
+            onError={handleError}
+            onLoadError={handleLoadError}
+          />
+        )}
+        {status !== "ready" && (
+          <div className="absolute inset-0 z-10 flex items-center justify-center bg-background">
+            {status === "error" ? (
+              <div className="flex max-w-xs flex-col items-center gap-4 text-center">
+                <p className="text-sm text-zinc-300">{errorMessage}</p>
+                <button
+                  type="button"
+                  onClick={handleRetry}
+                  className="rounded-md border border-edge bg-panel-raised px-4 py-2 text-xs font-medium text-zinc-200 transition-colors hover:border-zinc-600 hover:bg-zinc-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+                >
+                  Retry
+                </button>
+              </div>
+            ) : (
+              <div className="flex flex-col items-center gap-3">
+                <div
+                  role="status"
+                  aria-label="Loading map editor"
+                  className="size-8 animate-spin rounded-full border-2 border-edge border-t-accent"
+                />
+                <p className="text-xs uppercase tracking-[0.3em] text-zinc-500">
+                  Loading Map Editor
+                </p>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    );
+  },
+);
