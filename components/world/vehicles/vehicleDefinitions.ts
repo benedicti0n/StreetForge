@@ -22,7 +22,7 @@ export const VEHICLE_DEFINITIONS: Record<VehicleId, VehicleDefinition> = {
     worldPosition: [0, 0.61, 4],
     visualScale: 0.0131,
     visualRotation: [0, Math.PI, 0],
-    visualOffset: [1.326, -0.615, -2.27],
+    visualOffset: [-101.21, -46.945, 173.27],
   },
   police: {
     id: "police",
@@ -31,7 +31,7 @@ export const VEHICLE_DEFINITIONS: Record<VehicleId, VehicleDefinition> = {
     worldPosition: [0, 0.731, 12],
     visualScale: 0.185,
     visualRotation: [0, Math.PI, 0],
-    visualOffset: [0.959, -0.736, -2.294],
+    visualOffset: [-5.185, -3.98, 12.4],
   },
 };
 

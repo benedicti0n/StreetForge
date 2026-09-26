@@ -28,9 +28,21 @@ export function WorldScene({
     <>
       <color attach="background" args={["#101013"]} />
       <WorldCameraControls controlsRef={controlsRef} />
-      <hemisphereLight args={["#c9ced6", "#17171a", 0.55]} />
-      <directionalLight position={[20, 30, 10]} intensity={1.4} />
-      <mesh rotation-x={-Math.PI / 2} position={[0, 0, 0]}>
+      <hemisphereLight args={["#c9ced6", "#17171a", 1.1]} />
+      <directionalLight
+        position={[20, 30, 10]}
+        intensity={2.5}
+        castShadow
+        shadow-mapSize={[2048, 2048]}
+        shadow-camera-left={-30}
+        shadow-camera-right={30}
+        shadow-camera-top={30}
+        shadow-camera-bottom={-30}
+        shadow-camera-near={1}
+        shadow-camera-far={80}
+        shadow-bias={-0.0005}
+      />
+      <mesh rotation-x={-Math.PI / 2} position={[0, 0, 0]} receiveShadow>
         <planeGeometry args={[WORLD_GROUND_SIZE, WORLD_GROUND_SIZE]} />
         <meshStandardMaterial color="#1c1c20" roughness={0.95} metalness={0} />
       </mesh>
