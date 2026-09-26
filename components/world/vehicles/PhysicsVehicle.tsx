@@ -10,7 +10,7 @@ import {
 import {
   DynamicRayCastVehicleController,
   QueryFilterFlags,
-  Vector3,
+  Vector3 as RapierVector3,
   type Collider,
 } from "@dimforge/rapier3d-compat";
 import { useFrame } from "@react-three/fiber";
@@ -22,6 +22,7 @@ import {
   useRef,
   type RefObject,
 } from "react";
+import { Group, Object3D, Quaternion, Vector3 } from "three";
 import {
   VEHICLE_DEFINITIONS,
   type VehicleId,
@@ -31,7 +32,10 @@ import {
   type VehicleControlRef,
   type VehicleTelemetry,
 } from "./vehicleTypes";
-import { VehicleModel } from "./VehicleModel";
+import {
+  VehicleModel,
+  type VehicleWheelInfo,
+} from "./VehicleModel";
 
 export interface PhysicsVehicleHandle {
   reset(): void;
@@ -54,6 +58,16 @@ const REAR_WHEELS: WheelSlot[] = ["rl", "rr"];
 const clamp = (value: number, min: number, max: number) =>
   Math.min(max, Math.max(min, value));
 
+interface WheelVisualSetup {
+  pivot: Group;
+  node: Object3D;
+  baseQuaternion: Quaternion;
+}
+
+const _spinQuaternion = new Quaternion();
+const _baseQuaternion = new Quaternion();
+const _xAxis = new Vector3(1, 0, 0);
+
 export const PhysicsVehicle = forwardRef<
   PhysicsVehicleHandle,
   PhysicsVehicleProps
@@ -74,6 +88,29 @@ export const PhysicsVehicle = forwardRef<
   const { world } = useRapier();
   const rigidBodyRef = useRef<RapierRigidBody | null>(null);
   const controllerRef = useRef<DynamicRayCastVehicleController | null>(null);
+  const pivotRefs = useRef<Array<Group | null>>([null, null, null, null]);
+  const wheelVisualSetups = useRef<Map<number, WheelVisualSetup>>(new Map());
+  const appliedSteeringRef = useRef(0);
+
+  const handleWheelsReady = useCallback((wheels: VehicleWheelInfo[]) => {
+    const setups = new Map<number, WheelVisualSetup>();
+    wheels.forEach((wheel, index) => {
+      const pivot = pivotRefs.current[index];
+      if (!pivot) {
+        return;
+      }
+      const node = wheel.node;
+      pivot.attach(node);
+      pivot.position.add(node.position);
+      node.position.set(0, 0, 0);
+      setups.set(index, {
+        pivot,
+        node,
+        baseQuaternion: node.quaternion.clone(),
+      });
+    });
+    wheelVisualSetups.current = setups;
+  }, []);
 
   useEffect(() => {
     const body = rigidBodyRef.current;
@@ -86,9 +123,9 @@ export const PhysicsVehicle = forwardRef<
     for (const slot of WHEEL_ORDER) {
       const position = physics.wheelPositions[slot];
       controller.addWheel(
-        new Vector3(position[0], position[1], position[2]),
-        new Vector3(0, -1, 0),
-        new Vector3(-1, 0, 0),
+        new RapierVector3(position[0], position[1], position[2]),
+        new RapierVector3(0, -1, 0),
+        new RapierVector3(-1, 0, 0),
         physics.suspensionRestLength,
         physics.wheelRadius,
       );
@@ -185,6 +222,7 @@ export const PhysicsVehicle = forwardRef<
     const speedRatio = clamp(Math.abs(speed) / physics.maxSpeed, 0, 1);
     const steeringAngle =
       control.steering * physics.maxSteeringAngle * (1 - speedRatio * 0.65);
+    appliedSteeringRef.current = steeringAngle;
 
     let engine = 0;
     if (control.throttle > 0) {
@@ -255,6 +293,36 @@ export const PhysicsVehicle = forwardRef<
     if (telemetryRef) {
       telemetryRef.current = telemetry;
     }
+
+    const raw = (
+      controller as unknown as {
+        raw: {
+          num_wheels(): number;
+          wheel_rotation(i: number): number;
+          wheel_hard_point_ws(i: number): { x: number; y: number; z: number };
+          wheel_suspension_length(i: number): number;
+        };
+      }
+    ).raw;
+    const bodyY = body.translation().y;
+    const steering = appliedSteeringRef.current;
+    for (let i = 0; i < 4; i++) {
+      const setup = wheelVisualSetups.current.get(i);
+      if (!setup) {
+        continue;
+      }
+      const spin = raw.wheel_rotation(i);
+      _baseQuaternion.copy(setup.baseQuaternion);
+      _spinQuaternion.setFromAxisAngle(_xAxis, spin);
+      setup.node.quaternion.copy(_baseQuaternion).multiply(_spinQuaternion);
+      setup.pivot.rotation.y = FRONT_WHEELS.includes(WHEEL_ORDER[i])
+        ? steering
+        : 0;
+      const hardPoint = raw.wheel_hard_point_ws(i);
+      const suspensionLength = raw.wheel_suspension_length(i);
+      setup.pivot.position.y =
+        hardPoint.y - suspensionLength - bodyY;
+    }
   });
 
   const chassisVolume =
@@ -282,8 +350,21 @@ export const PhysicsVehicle = forwardRef<
         onCollisionEnter={handleCollision}
       />
       <group position={[0, physics.visualOffsetY, 0]}>
-        <VehicleModel definition={definition} onLoad={onLoad} />
+        <VehicleModel
+          definition={definition}
+          onLoad={onLoad}
+          onWheelsReady={handleWheelsReady}
+        />
       </group>
+      {WHEEL_ORDER.map((slot, index) => (
+        <group
+          key={slot}
+          ref={(node) => {
+            pivotRefs.current[index] = node;
+          }}
+          position={physics.wheelPositions[slot]}
+        />
+      ))}
     </RigidBody>
   );
 });

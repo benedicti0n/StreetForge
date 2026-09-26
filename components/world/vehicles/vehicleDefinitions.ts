@@ -45,6 +45,8 @@ export interface VehicleDefinition {
   visualScale: number;
   visualRotation: Vector3Tuple;
   visualOffset: Vector3Tuple;
+  /** Names of the four wheel container Object3D nodes in the GLB hierarchy. */
+  wheelNodeNames: [string, string, string, string];
   physics: VehiclePhysicsConfig;
 }
 
@@ -57,6 +59,7 @@ export const VEHICLE_DEFINITIONS: Record<VehicleId, VehicleDefinition> = {
     visualScale: 0.0131,
     visualRotation: [0, Math.PI, 0],
     visualOffset: [-101.21, -46.945, 173.27],
+    wheelNodeNames: ["wheel_rb", "wheel_rb_1", "wheel_rb_2", "wheel_rb_3"],
     physics: {
       mass: 1250,
       chassisHalfExtents: [0.85, 0.3, 1.9],
@@ -93,6 +96,7 @@ export const VEHICLE_DEFINITIONS: Record<VehicleId, VehicleDefinition> = {
     visualScale: 0.185,
     visualRotation: [0, Math.PI, 0],
     visualOffset: [-5.185, -3.98, 12.4],
+    wheelNodeNames: ["wheel", "wheel_1", "wheel_2", "wheel_3"],
     physics: {
       mass: 1900,
       chassisHalfExtents: [0.9, 0.33, 2.0],
