@@ -12,6 +12,7 @@ import {
   VEHICLE_DEFINITIONS,
   type VehicleId,
 } from "./vehicles/vehicleDefinitions";
+import { PhysicsWorld } from "./physics/PhysicsWorld";
 import { WorldCameraControls } from "./WorldCameraControls";
 
 type ControlsRef = React.ElementRef<typeof OrbitControls>;
@@ -88,17 +89,19 @@ export function WorldScene({
         infiniteGrid
         followCamera={false}
       />
-      <VehicleLoadErrorBoundary onFail={onVehicleLoadFailed}>
-        <Suspense fallback={null}>
-          {vehicles.map((id) => (
-            <VehicleModel
-              key={id}
-              definition={VEHICLE_DEFINITIONS[id]}
-              onLoad={onVehicleLoaded}
-            />
-          ))}
-        </Suspense>
-      </VehicleLoadErrorBoundary>
+      <PhysicsWorld>
+        <VehicleLoadErrorBoundary onFail={onVehicleLoadFailed}>
+          <Suspense fallback={null}>
+            {vehicles.map((id) => (
+              <VehicleModel
+                key={id}
+                definition={VEHICLE_DEFINITIONS[id]}
+                onLoad={onVehicleLoaded}
+              />
+            ))}
+          </Suspense>
+        </VehicleLoadErrorBoundary>
+      </PhysicsWorld>
     </>
   );
 }
