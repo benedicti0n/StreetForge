@@ -130,6 +130,8 @@ export function GameOverlays({ telemetryRef, chaseTelemetryRef }: GameOverlaysPr
           <GoFlash reducedMotion={reduced} />
         </>
       )}
+
+      {state === "escaped" && <ResultOverlay reducedMotion={reduced} />}
     </div>
   );
 }
@@ -245,6 +247,66 @@ function GoFlash({ reducedMotion }: { reducedMotion: boolean }) {
       <p className="text-6xl font-black tracking-tight text-emerald-400 drop-shadow-[0_0_28px_rgba(16,185,129,0.5)]">
         GO
       </p>
+    </div>
+  );
+}
+function ResultOverlay({ reducedMotion }: { reducedMotion: boolean }) {
+  const experience = useExperience();
+  const result = experience.result;
+  if (!result) {
+    return null;
+  }
+  return (
+    <div
+      className={`pointer-events-auto flex flex-col items-center gap-3 rounded-lg border border-emerald-500/40 bg-panel/90 px-10 py-8 text-center shadow-2xl backdrop-blur-sm ${
+        reducedMotion ? "" : "animate-[sf-rise_0.35s_ease-out]"
+      }`}
+    >
+      <p className="text-5xl font-black uppercase tracking-[0.12em] text-emerald-400">
+        Escaped
+      </p>
+      <p className="max-w-[36ch] text-sm leading-relaxed text-zinc-300">
+        You lost the pursuit. The streets are yours.
+      </p>
+      <div className="mt-1 flex items-center gap-6 text-center">
+        <ResultStat label="Peak speed" value={`${result.peakSpeedKmh}`} unit="km/h" />
+        <ResultStat label="Chase time" value={`${result.durationSeconds}`} unit="s" />
+        <ResultStat label="Closest police" value={`${result.closestPoliceMeters}`} unit="m" />
+      </div>
+      <div className="mt-2 flex items-center gap-3">
+        <button
+          type="button"
+          onClick={experience.runItBack}
+          aria-label="Replay the pursuit in the same world"
+          className="rounded-md bg-accent px-6 py-2.5 text-xs font-bold uppercase tracking-[0.2em] text-zinc-950 transition-colors hover:bg-amber-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+        >
+          Run It Back
+        </button>
+        <button
+          type="button"
+          onClick={experience.editWorld}
+          aria-label="Return to the map editor"
+          className="rounded-md border border-edge bg-panel-raised px-4 py-2.5 text-[11px] font-medium uppercase tracking-[0.15em] text-zinc-300 transition-colors hover:border-zinc-600 hover:text-zinc-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+        >
+          Edit World
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function ResultStat({ label, value, unit }: { label: string; value: string; unit: string }) {
+  return (
+    <div className="flex flex-col items-center">
+      <span className="text-[9px] font-semibold uppercase tracking-[0.25em] text-zinc-500">
+        {label}
+      </span>
+      <span className="mt-1 font-mono text-xl font-bold tabular-nums text-zinc-50">
+        {value}
+      </span>
+      <span className="text-[9px] uppercase tracking-[0.2em] text-zinc-500">
+        {unit}
+      </span>
     </div>
   );
 }
