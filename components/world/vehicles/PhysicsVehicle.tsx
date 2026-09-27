@@ -46,6 +46,7 @@ interface PhysicsVehicleProps {
   controls: VehicleControlRef;
   isPlayer?: boolean;
   autoResetBelowY?: number;
+  bodyRef?: RefObject<RapierRigidBody | null>;
   onLoad?: () => void;
   onTelemetry?: (telemetry: VehicleTelemetry) => void;
   telemetryRef?: RefObject<VehicleTelemetry | null>;
@@ -77,6 +78,7 @@ export const PhysicsVehicle = forwardRef<
     controls,
     isPlayer = false,
     autoResetBelowY,
+    bodyRef,
     onLoad,
     onTelemetry,
     telemetryRef,
@@ -333,7 +335,12 @@ export const PhysicsVehicle = forwardRef<
 
   return (
     <RigidBody
-      ref={rigidBodyRef}
+      ref={(node) => {
+        rigidBodyRef.current = node;
+        if (bodyRef) {
+          bodyRef.current = node;
+        }
+      }}
       type="dynamic"
       position={definition.worldPosition}
       rotation={definition.visualRotation}

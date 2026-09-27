@@ -13,8 +13,10 @@ import {
   type VehicleControlRef,
   type VehicleTelemetry,
 } from "./vehicles/vehicleTypes";
+import type { RapierRigidBody } from "@react-three/rapier";
 import { PhysicsWorld } from "./physics/PhysicsWorld";
 import { WorldCameraControls } from "./WorldCameraControls";
+import { VehicleFollowCamera } from "./camera/VehicleFollowCamera";
 
 type ControlsRef = React.ElementRef<typeof OrbitControls>;
 
@@ -47,6 +49,7 @@ interface WorldSceneProps {
   vehicles?: VehicleId[];
   vehicleControls: Record<VehicleId, VehicleControlRef>;
   playerVehicleRef?: RefObject<PhysicsVehicleHandle | null>;
+  playerBodyRef?: RefObject<RapierRigidBody | null>;
   playerTelemetryRef?: RefObject<VehicleTelemetry | null>;
   driveMode?: boolean;
   onVehicleLoaded?: () => void;
@@ -58,6 +61,7 @@ export function WorldScene({
   vehicles = [],
   vehicleControls,
   playerVehicleRef,
+  playerBodyRef,
   playerTelemetryRef,
   driveMode = false,
   onVehicleLoaded,
@@ -67,6 +71,11 @@ export function WorldScene({
     <>
       <color attach="background" args={["#101013"]} />
       <WorldCameraControls controlsRef={controlsRef} enabled={!driveMode} />
+      <VehicleFollowCamera
+        bodyRef={playerBodyRef}
+        telemetryRef={playerTelemetryRef}
+        active={driveMode}
+      />
       <hemisphereLight args={["#c9ced6", "#17171a", 1.1]} />
       <directionalLight
         position={[20, 30, 10]}
@@ -109,6 +118,7 @@ export function WorldScene({
                 controls={vehicleControls[id]}
                 isPlayer={id === "race"}
                 autoResetBelowY={id === "race" ? -10 : undefined}
+                bodyRef={id === "race" ? playerBodyRef : undefined}
                 telemetryRef={id === "race" ? playerTelemetryRef : undefined}
                 onLoad={onVehicleLoaded}
               />

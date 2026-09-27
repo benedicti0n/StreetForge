@@ -21,6 +21,7 @@ import {
   type VehicleId,
 } from "./vehicles/vehicleDefinitions";
 import type { PhysicsVehicleHandle } from "./vehicles/PhysicsVehicle";
+import type { RapierRigidBody } from "@react-three/rapier";
 import {
   IDLE_CONTROLS,
   type VehicleControlRef,
@@ -73,6 +74,7 @@ export function WorldViewport() {
   const controlsRef = useRef<ControlsRef>(null);
   const viewportRef = useRef<HTMLElement>(null);
   const playerVehicleRef = useRef<PhysicsVehicleHandle | null>(null);
+  const playerBodyRef = useRef<RapierRigidBody | null>(null);
   const [webglAvailable, setWebglAvailable] = useState<boolean | null>(null);
   const [pendingVehicles, setPendingVehicles] = useState(
     SCENE_VEHICLES.length,
@@ -192,6 +194,7 @@ export function WorldViewport() {
               vehicles={SCENE_VEHICLES}
               vehicleControls={vehicleControlsRef}
               playerVehicleRef={playerVehicleRef}
+              playerBodyRef={playerBodyRef}
               playerTelemetryRef={playerTelemetryRef}
               driveMode={driveMode}
               onVehicleLoaded={handleVehicleLoaded}
