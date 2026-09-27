@@ -63,9 +63,11 @@ export async function POST(request: Request) {
     const response = await client.images.edit(
       {
         model: process.env.OPENAI_IMAGE_MODEL ?? "gpt-image-2",
-        image: new File([decoded.buffer], "sketch.png", {
-          type: decoded.mime,
-        }),
+        image: new File(
+          [decoded.buffer as unknown as BlobPart],
+          "sketch.png",
+          { type: decoded.mime },
+        ),
         prompt: NORMALIZATION_PROMPT,
         size: "1024x1024",
         response_format: "b64_json",
