@@ -11,6 +11,7 @@ import {
   type MapCaptureFeedback,
 } from "./MapEditorHeader";
 import { useWorldPipeline } from "@/components/world/generation/WorldPipeline";
+import { ForgeColorPalette } from "./ForgeColorPalette";
 
 interface MapEditorPanelProps {
   /** Visually collapses the panel without unmounting the editor. */
@@ -95,6 +96,7 @@ export function MapEditorPanel({ collapsed = false }: MapEditorPanelProps) {
         onReset={handleReset}
         onBuildWorld={handleBuildWorld}
       />
+      <ForgeColorPalette />
       <div className="flex min-h-0 min-w-0 flex-1 flex-col">
         <MapEditor ref={mapEditorRef} onStatusChange={handleStatusChange} />
       </div>

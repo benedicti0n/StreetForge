@@ -41,6 +41,10 @@ interface MapEditorFeatures {
 
 interface MapEditorOptions extends Omit<ImageEditorOptions, "features"> {
   features?: MapEditorFeatures;
+  /** Extended embed options (draw tool palette). */
+  tools?: {
+    draw?: { colors?: string[] };
+  };
 }
 
 const MAP_EDITOR_OPTIONS: MapEditorOptions = {
@@ -59,6 +63,19 @@ const MAP_EDITOR_OPTIONS: MapEditorOptions = {
         shapes: true,
         stickers: true,
       },
+    },
+  },
+  tools: {
+    draw: {
+      colors: [
+        "#1c1c1f",
+        "#8a909a",
+        "#2f7fd0",
+        "#3e8e3f",
+        "#e99a28",
+        "#b8a272",
+        "#303238",
+      ],
     },
   },
 };
