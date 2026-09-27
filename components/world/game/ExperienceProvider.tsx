@@ -109,6 +109,8 @@ export function ExperienceProvider({ children }: ExperienceProviderProps) {
     closestPoliceMeters: Infinity,
   });
   const lastContactAtRef = useRef(0);
+  const escapeProgressRef = useRef(0);
+  const bustProgressRef = useRef(0);
 
   const phase = pipeline.generationState.phase;
   const generatedWorld = pipeline.generatedWorld;
@@ -159,6 +161,8 @@ export function ExperienceProvider({ children }: ExperienceProviderProps) {
     }
     setEscapeProgress(0);
     setBustProgress(0);
+    escapeProgressRef.current = 0;
+    bustProgressRef.current = 0;
     setResult(null);
     statsRef.current = { peakSpeedKmh: 0, closestPoliceMeters: Infinity };
   }, []);
@@ -305,10 +309,14 @@ export function ExperienceProvider({ children }: ExperienceProviderProps) {
 
         // ESCAPE
         if (distance > escapeDistance && playerActive) {
-          setEscapeProgress((p) => p + dt / ESCAPE_HOLD_SECONDS);
+          escapeProgressRef.current = Math.min(
+            1,
+            escapeProgressRef.current + dt / ESCAPE_HOLD_SECONDS,
+          );
         } else {
-          setEscapeProgress((p) =>
-            Math.max(0, p - dt / ESCAPE_DECAY_SECONDS),
+          escapeProgressRef.current = Math.max(
+            0,
+            escapeProgressRef.current - dt / ESCAPE_DECAY_SECONDS,
           );
         }
 
@@ -318,30 +326,30 @@ export function ExperienceProvider({ children }: ExperienceProviderProps) {
           playerSpeedKmh < BUST_SLOW_SPEED_KMH &&
           playerGrounded;
         if (captureCondition) {
-          setBustProgress((p) =>
-            p +
-            (dt / BUST_HOLD_SECONDS) *
-              (recentContact ? BUST_COLLISION_MULTIPLIER : 1),
+          bustProgressRef.current = Math.min(
+            1,
+            bustProgressRef.current +
+              (dt / BUST_HOLD_SECONDS) *
+                (recentContact ? BUST_COLLISION_MULTIPLIER : 1),
           );
         } else {
-          setBustProgress((p) => Math.max(0, p - dt / BUST_DECAY_SECONDS));
+          bustProgressRef.current = Math.max(
+            0,
+            bustProgressRef.current - dt / BUST_DECAY_SECONDS,
+          );
         }
       }
 
-      setEscapeProgress((p) => {
-        if (p >= 1) {
-          finishGame("escaped");
-          return 0;
-        }
-        return p;
-      });
-      setBustProgress((p) => {
-        if (p >= 1) {
-          finishGame("busted");
-          return 0;
-        }
-        return p;
-      });
+      setEscapeProgress(escapeProgressRef.current);
+      setBustProgress(bustProgressRef.current);
+      if (escapeProgressRef.current >= 1) {
+        finishGame("escaped");
+        return;
+      }
+      if (bustProgressRef.current >= 1) {
+        finishGame("busted");
+        return;
+      }
       raf = requestAnimationFrame(loop);
     };
     raf = requestAnimationFrame(loop);
