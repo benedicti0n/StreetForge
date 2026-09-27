@@ -12,7 +12,12 @@ import {
 } from "./MapEditorHeader";
 import { useWorldPipeline } from "@/components/world/generation/WorldPipeline";
 
-export function MapEditorPanel() {
+interface MapEditorPanelProps {
+  /** Visually collapses the panel without unmounting the editor. */
+  collapsed?: boolean;
+}
+
+export function MapEditorPanel({ collapsed = false }: MapEditorPanelProps) {
   const mapEditorRef = useRef<MapEditorHandle>(null);
   const capturedMapRef = useRef<string | null>(null);
   const [editorStatus, setEditorStatus] =
@@ -57,7 +62,13 @@ export function MapEditorPanel() {
   return (
     <section
       aria-label="Map image editor"
-      className="flex min-h-0 min-w-0 flex-col bg-background"
+      aria-hidden={collapsed || undefined}
+      inert={collapsed || undefined}
+      className={`flex min-h-0 min-w-0 flex-col bg-background transition-[width,height,opacity] duration-300 ease-in-out ${
+        collapsed
+          ? "pointer-events-none h-0 w-full overflow-hidden opacity-0 md:h-auto md:w-0"
+          : "h-auto w-full md:w-1/2"
+      }`}
     >
       <MapEditorHeader
         editorReady={editorStatus === "ready"}

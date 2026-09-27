@@ -406,7 +406,7 @@ export function WorldViewport() {
     <section
       ref={viewportRef}
       aria-label="3D world viewport"
-      className="relative h-full min-h-0 w-full overflow-hidden bg-background"
+      className="relative h-full min-h-0 w-full flex-1 overflow-hidden bg-background"
       onPointerDown={(event) => {
         const target = event.target as HTMLElement | null;
         if (target?.closest("[data-viewport-overlay]")) {
