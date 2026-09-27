@@ -15,6 +15,7 @@ import {
   buildWedge,
 } from "@/lib/sketchworld/geometry";
 import { traceBoundary } from "@/lib/sketchworld/parseSketch";
+import { Shape, ShapeGeometry } from "three";
 import type { SafeSpawnResult } from "@/components/world/generated/SafeSpawnResolver";
 
 const WALL_HEIGHT = 3.5;
@@ -51,6 +52,12 @@ const CANOPY_MATERIAL = new MeshStandardMaterial({
 const CANOPY_LIGHT_MATERIAL = new MeshStandardMaterial({
   color: "#5CC05E",
   roughness: 1,
+});
+const WATER_SURFACE_MATERIAL = new MeshStandardMaterial({
+  color: "#3E9BEF",
+  roughness: 0.35,
+  metalness: 0.1,
+  toneMapped: false,
 });
 const WALL_MATERIAL = new MeshStandardMaterial({
   color: "#41424a",
@@ -94,13 +101,12 @@ export function ProceduralWorld({
       ),
     [descriptor.semantic],
   );
-  const waterWallGeometry = useMemo(() => {
+  const waterContourWorld = useMemo(() => {
     const waterMask = descriptor.semantic?.waterMask;
     if (!waterMask || !descriptor.roadTexture) {
       return null;
     }
     const labels = new Int32Array(waterMask.length).fill(-1);
-    // find the largest water component
     let largest = 0;
     for (let i = 0; i < waterMask.length; i++) {
       if (waterMask[i] === 1) {
@@ -117,12 +123,37 @@ export function ProceduralWorld({
     }
     const grid = descriptor.roadTexture.grid;
     const size = descriptor.worldSize;
-    const world = contour.map(([x, y]) => [
+    return contour.map(([x, y]) => [
       (x / (grid - 1) - 0.5) * size,
       (y / (grid - 1) - 0.5) * size,
     ] as [number, number]);
-    return buildEdgeWalls(world, 0.9);
   }, [descriptor.semantic, descriptor.roadTexture, descriptor.worldSize]);
+
+  const waterWallGeometry = useMemo(() => {
+    if (!waterContourWorld) {
+      return null;
+    }
+    return buildEdgeWalls(waterContourWorld, 0.9);
+  }, [waterContourWorld]);
+
+  const waterSurfaceGeometry = useMemo(() => {
+    if (!waterContourWorld || waterContourWorld.length < 3) {
+      return null;
+    }
+    const shape = new Shape();
+    shape.moveTo(waterContourWorld[0][0], waterContourWorld[0][1]);
+    for (let i = 1; i < waterContourWorld.length; i++) {
+      shape.lineTo(waterContourWorld[i][0], waterContourWorld[i][1]);
+    }
+    shape.closePath();
+    const geometry = new ShapeGeometry(shape);
+    const positions = geometry.attributes.position;
+    for (let i = 0; i < positions.count; i++) {
+      positions.setY(i, 0.015);
+    }
+    positions.needsUpdate = true;
+    return geometry;
+  }, [waterContourWorld]);
 
   const wallGeometries = useMemo(
     () =>
@@ -257,6 +288,14 @@ export function ProceduralWorld({
           />
         </group>
       ))}
+
+      {/* Water surface (saturated blue, un-washed by lighting) */}
+      {waterSurfaceGeometry && (
+        <mesh
+          geometry={waterSurfaceGeometry}
+          material={WATER_SURFACE_MATERIAL}
+        />
+      )}
 
       {/* Ramps */}
       {(descriptor.semantic?.ramps ?? []).map((ramp, index) => (
