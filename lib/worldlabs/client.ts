@@ -138,6 +138,7 @@ export async function startWorldGeneration(
       world_prompt: {
         type: "image",
         image_prompt: {
+          source: "data_base64",
           data_base64: dataBase64,
           extension: "png",
         },
