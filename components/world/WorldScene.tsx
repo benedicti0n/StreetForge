@@ -20,7 +20,13 @@ import {
 } from "./vehicles/vehicleTypes";
 import type { RapierRigidBody } from "@react-three/rapier";
 import { useFrame, useThree } from "@react-three/fiber";
-import { PMREMGenerator, Scene } from "three";
+import {
+  BackSide,
+  CanvasTexture,
+  PMREMGenerator,
+  Scene,
+  SRGBColorSpace,
+} from "three";
 import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
 import { PhysicsWorld } from "./physics/PhysicsWorld";
 import { WorldCameraControls } from "./WorldCameraControls";
