@@ -163,13 +163,15 @@ export function ProceduralWorld({
           position={[0, -0.5, 0]}
           friction={1}
         />
-        {/* Walls */}
+        {/* Walls: low friction + a gentle bounce so cars slide along them
+            instead of stalling against the arena boundary. */}
         {walls(descriptor.worldSize).map((wall, index) => (
           <CuboidCollider
             key={`wall-${index}`}
             args={wall.args}
             position={wall.position}
-            friction={0.8}
+            friction={0.25}
+            restitution={0.25}
           />
         ))}
         {/* Buildings */}

@@ -49,6 +49,10 @@ export function useVehicleKeyboard(
           steering: 0,
           handbrake: 0,
         });
+        (globalThis as unknown as { __SF_KB?: unknown }).__SF_KB = {
+          keys: [],
+          editable: true,
+        };
         return;
       }
       const up = keys.has("KeyW") || keys.has("ArrowUp");
@@ -61,6 +65,11 @@ export function useVehicleKeyboard(
       controlsRef.current.steering = (left ? 1 : 0) - (right ? 1 : 0);
       controlsRef.current.handbrake = keys.has("Space") ? 1 : 0;
       controlsRef.current.brake = 0;
+      (globalThis as unknown as { __SF_KB?: unknown }).__SF_KB = {
+        keys: [...keys],
+        editable: false,
+        throttle: controlsRef.current.throttle,
+      };
     };
 
     const handleKeyDown = (event: KeyboardEvent) => {
