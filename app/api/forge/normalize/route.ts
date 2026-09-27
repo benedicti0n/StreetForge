@@ -129,7 +129,8 @@ export async function POST(request: Request) {
         ),
         prompt: NORMALIZATION_PROMPT,
         size: "1024x1024",
-        response_format: "b64_json",
+        // NOTE: gpt-image-2 returns b64_json by default; the API rejects
+        // the `response_format` parameter with "unknown_parameter".
       },
       { signal: controller.signal, timeout: REQUEST_TIMEOUT_MS },
     );
