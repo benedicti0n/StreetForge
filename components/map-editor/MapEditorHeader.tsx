@@ -78,7 +78,8 @@ export function MapEditorHeader({
             World Sketch
           </h1>
           <p className="truncate text-[11px] text-zinc-500">
-            Draw the world you want to drive through.
+            Sketch roads, terrain, ramps and landmarks. StreetForge will
+            interpret your layout.
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-3">

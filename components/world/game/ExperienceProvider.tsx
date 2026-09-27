@@ -42,6 +42,19 @@ const GENERATION_PHASES: WorldGenerationState["phase"][] = [
 
 const COUNTDOWN_TICK_MS = 1000;
 
+const INTRO_STORAGE_KEY = "streetforge:intro:v1";
+
+function readIntroDismissed(): boolean {
+  if (typeof window === "undefined") {
+    return false;
+  }
+  try {
+    return window.localStorage.getItem(INTRO_STORAGE_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
 interface ExperienceApi {
   state: ExperienceState;
   countdownValue: number;
@@ -80,7 +93,7 @@ export function ExperienceProvider({ children }: ExperienceProviderProps) {
   const [escapeProgress, setEscapeProgress] = useState(0);
   const [bustProgress, setBustProgress] = useState(0);
   const [result, setResult] = useState<GameResultStats | null>(null);
-  const [introDismissed, setIntroDismissed] = useState(false);
+  const [introDismissed, setIntroDismissed] = useState(readIntroDismissed);
 
   const gameRefsRef = useRef<GameRefs | null>(null);
   const [assetsReadyWorldId, setAssetsReadyWorldId] = useState<string | null>(
@@ -179,6 +192,11 @@ export function ExperienceProvider({ children }: ExperienceProviderProps) {
   }, [state]);
 
   const dismissIntro = useCallback(() => {
+    try {
+      window.localStorage.setItem(INTRO_STORAGE_KEY, "1");
+    } catch {
+      // ignore storage failures
+    }
     setIntroDismissed(true);
   }, []);
 

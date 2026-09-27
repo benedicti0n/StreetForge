@@ -74,6 +74,13 @@ export function GameOverlays({ telemetryRef, chaseTelemetryRef }: GameOverlaysPr
       data-viewport-overlay
       className="pointer-events-none absolute inset-0 z-20 flex flex-col items-center justify-center"
     >
+      {!experience.introDismissed && (
+        <IntroOverlay
+          onDismiss={experience.dismissIntro}
+          reducedMotion={reduced}
+        />
+      )}
+
       {state === "world-ready" && (
         <div className="pointer-events-auto flex flex-col items-center gap-3 rounded-lg border border-accent/40 bg-panel/90 px-8 py-6 text-center shadow-2xl backdrop-blur-sm">
           <p className="text-[10px] font-semibold uppercase tracking-[0.35em] text-zinc-400">
@@ -134,6 +141,55 @@ export function GameOverlays({ telemetryRef, chaseTelemetryRef }: GameOverlaysPr
       {(state === "escaped" || state === "busted") && (
         <ResultOverlay reducedMotion={reduced} />
       )}
+    </div>
+  );
+}
+
+function IntroOverlay({
+  onDismiss,
+  reducedMotion,
+}: {
+  onDismiss: () => void;
+  reducedMotion: boolean;
+}) {
+  return (
+    <div
+      className={`pointer-events-auto flex flex-col items-center gap-5 rounded-lg border border-edge bg-panel/95 px-10 py-9 text-center shadow-2xl backdrop-blur-sm ${
+        reducedMotion ? "" : "animate-[sf-rise_0.4s_ease-out]"
+      }`}
+    >
+      <p className="text-4xl font-black uppercase tracking-[0.18em] text-zinc-50">
+        Street<span className="text-accent">Forge</span>
+      </p>
+      <p className="text-[11px] font-semibold uppercase tracking-[0.4em] text-zinc-400">
+        Draw it. Drive it. Escape it.
+      </p>
+      <div className="flex items-center gap-6">
+        <IntroStep number="1" label="Sketch a world" />
+        <IntroStep number="2" label="Forge it into 3D" />
+        <IntroStep number="3" label="Outrun the police" />
+      </div>
+      <button
+        type="button"
+        onClick={onDismiss}
+        aria-label="Start drawing your world"
+        className="mt-2 rounded-md bg-accent px-7 py-2.5 text-xs font-bold uppercase tracking-[0.2em] text-zinc-950 transition-colors hover:bg-amber-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+      >
+        Forge a World
+      </button>
+    </div>
+  );
+}
+
+function IntroStep({ number, label }: { number: string; label: string }) {
+  return (
+    <div className="flex flex-col items-center gap-1.5">
+      <span className="flex h-7 w-7 items-center justify-center rounded-full border border-accent/50 text-[11px] font-bold text-accent">
+        {number}
+      </span>
+      <span className="text-[10px] font-medium uppercase tracking-[0.18em] text-zinc-400">
+        {label}
+      </span>
     </div>
   );
 }
