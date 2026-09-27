@@ -22,7 +22,7 @@ import {
   useRef,
   type RefObject,
 } from "react";
-import { Group, Object3D, Quaternion, Vector3 } from "three";
+import { Box3, Group, Object3D, Quaternion, Vector3 } from "three";
 import {
   VEHICLE_DEFINITIONS,
   type VehicleId,
@@ -65,6 +65,7 @@ interface WheelVisualSetup {
   pivot: Group;
   node: Object3D;
   baseQuaternion: Quaternion;
+  basePosition: Vector3;
 }
 
 const _spinQuaternion = new Quaternion();
@@ -72,6 +73,12 @@ const _baseQuaternion = new Quaternion();
 const _xAxis = new Vector3(1, 0, 0);
 const _rightVector = new Vector3();
 const _telemetryQuaternion = new Quaternion();
+const _wheelBox = new Box3();
+const _wheelCenter = new Vector3();
+const _hardPoint = new Vector3();
+const _bodyTranslation = new Vector3();
+const _bodyRotation = new Quaternion();
+const _inverseBodyQuaternion = new Quaternion();
 
 export const PhysicsVehicle = forwardRef<
   PhysicsVehicleHandle,
@@ -108,13 +115,21 @@ export const PhysicsVehicle = forwardRef<
         return;
       }
       const node = wheel.node;
+      // Reparent the wheel geometry into the corrective pivot once, while
+      // preserving its world transform. The pivot's origin is then shifted
+      // to the measured geometry centre of the wheel subtree, so spin and
+      // steering rotate around the visible wheel centre - never a bad
+      // source-container origin (the police GLB has those).
       pivot.attach(node);
-      pivot.position.add(node.position);
-      node.position.set(0, 0, 0);
+      _wheelBox.setFromObject(node);
+      _wheelCenter.copy(_wheelBox.getCenter(new Vector3()));
+      pivot.worldToLocal(_wheelCenter);
+      node.position.sub(_wheelCenter);
       setups.set(index, {
         pivot,
         node,
         baseQuaternion: node.quaternion.clone(),
+        basePosition: pivot.position.clone(),
       });
     });
     wheelVisualSetups.current = setups;
@@ -363,7 +378,6 @@ export const PhysicsVehicle = forwardRef<
         };
       }
     ).raw;
-    const bodyY = body.translation().y;
     const steering = appliedSteeringRef.current;
     for (let i = 0; i < 4; i++) {
       const setup = wheelVisualSetups.current.get(i);
@@ -377,10 +391,25 @@ export const PhysicsVehicle = forwardRef<
       setup.pivot.rotation.y = FRONT_WHEELS.includes(WHEEL_ORDER[i])
         ? steering
         : 0;
+      // Convert the world-space suspension hard point into the vehicle's
+      // local space before applying it to the pivot (the pivot is a child of
+      // the chassis). Mixing world coordinates into local positions is what
+      // made wheels orbit wrong pivots under pitch/roll.
       const hardPoint = raw.wheel_hard_point_ws(i);
       const suspensionLength = raw.wheel_suspension_length(i);
-      setup.pivot.position.y =
-        hardPoint.y - suspensionLength - bodyY;
+      _hardPoint.set(hardPoint.x, hardPoint.y, hardPoint.z);
+      const translation = body.translation();
+      _bodyTranslation.set(translation.x, translation.y, translation.z);
+      const rotation = body.rotation();
+      _bodyRotation.set(rotation.x, rotation.y, rotation.z, rotation.w);
+      _inverseBodyQuaternion.copy(_bodyRotation).invert();
+      _hardPoint.sub(_bodyTranslation);
+      _hardPoint.applyQuaternion(_inverseBodyQuaternion);
+      setup.pivot.position.set(
+        setup.basePosition.x,
+        _hardPoint.y - suspensionLength,
+        setup.basePosition.z,
+      );
     }
   });
 
