@@ -94,9 +94,8 @@ function GradientSky() {
 }
 
 function SceneEnvironment() {
-  const gl = useThree((state) => state.gl);
-  const scene = useThree((state) => state.scene);
-  useFrame(() => {
+  useFrame((state) => {
+    const { gl, scene } = state;
     if (!scene.environment) {
       const pmrem = new PMREMGenerator(gl);
       const environmentScene = new Scene();
