@@ -8,7 +8,10 @@ import {
   type SplatQuality,
 } from "@/lib/worldlabs/splatQuality";
 import { useExperience } from "@/components/world/game/ExperienceProvider";
-import type { WorldKind } from "@/components/world/generation/WorldPipeline";
+import type {
+  ForgeMode,
+  WorldKind,
+} from "@/components/world/generation/WorldPipeline";
 
 export type MapCaptureFeedback = "captured" | "error" | "ai-fallback" | null;
 
@@ -19,6 +22,9 @@ interface MapEditorHeaderProps {
   generationActive: boolean;
   worldKind: WorldKind;
   onWorldKindChange: (kind: WorldKind) => void;
+  forgeMode: ForgeMode;
+  onForgeModeChange: (mode: ForgeMode) => void;
+  aiEnabled: boolean;
   onModeChange: (mode: GenerationMode) => void;
   onReset: () => void;
   onBuildWorld: () => void;
@@ -32,10 +38,10 @@ const STEP_LABELS: Record<
 > = {
   editing: { label: "", stepIndex: -1 },
   capturing: { label: "Reading the sketch", stepIndex: 0 },
-  submitting: { label: "Starting generation", stepIndex: 1 },
-  generating: { label: "Building the environment", stepIndex: 2 },
-  fetchingWorld: { label: "Preparing collision", stepIndex: 3 },
-  loadingWorld: { label: "Finding safe ground", stepIndex: 4 },
+  submitting: { label: "Interpreting layout", stepIndex: 1 },
+  generating: { label: "Building the world", stepIndex: 2 },
+  fetchingWorld: { label: "Preparing chase", stepIndex: 3 },
+  loadingWorld: { label: "Preparing chase", stepIndex: 4 },
   worldReady: { label: "World ready", stepIndex: 5 },
   error: { label: "Generation failed", stepIndex: -1 },
 };
@@ -47,6 +53,9 @@ export function MapEditorHeader({
   generationActive,
   worldKind,
   onWorldKindChange,
+  forgeMode,
+  onForgeModeChange,
+  aiEnabled,
   onModeChange,
   onReset,
   onBuildWorld,
@@ -175,6 +184,40 @@ export function MapEditorHeader({
                 }`}
               >
                 Marble
+              </button>
+            </div>
+          )}
+          {generation.phase === "editing" && worldKind === "forge" && (
+            <div
+              role="group"
+              aria-label="Forge mode"
+              title="AI Forge normalizes your sketch with OpenAI first. Local Forge interprets it directly."
+              className="flex items-center rounded-md border border-edge bg-background p-0.5"
+            >
+              <button
+                type="button"
+                onClick={() => aiEnabled && onForgeModeChange("ai")}
+                disabled={!aiEnabled}
+                aria-pressed={forgeMode === "ai"}
+                className={`rounded px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.15em] transition-colors focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent disabled:cursor-not-allowed disabled:opacity-40 ${
+                  forgeMode === "ai"
+                    ? "bg-panel-raised text-zinc-100"
+                    : "text-zinc-500 hover:text-zinc-300"
+                }`}
+              >
+                AI
+              </button>
+              <button
+                type="button"
+                onClick={() => onForgeModeChange("local")}
+                aria-pressed={forgeMode === "local"}
+                className={`rounded px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.15em] transition-colors focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent ${
+                  forgeMode === "local"
+                    ? "bg-panel-raised text-zinc-100"
+                    : "text-zinc-500 hover:text-zinc-300"
+                }`}
+              >
+                Local
               </button>
             </div>
           )}
