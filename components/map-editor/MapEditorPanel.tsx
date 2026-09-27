@@ -10,6 +10,7 @@ import {
   MapEditorHeader,
   type MapCaptureFeedback,
 } from "./MapEditorHeader";
+import { useWorldPipeline } from "@/components/world/generation/WorldPipeline";
 
 export function MapEditorPanel() {
   const mapEditorRef = useRef<MapEditorHandle>(null);
@@ -17,12 +18,19 @@ export function MapEditorPanel() {
   const [editorStatus, setEditorStatus] =
     useState<MapEditorStatus>("loading");
   const [feedback, setFeedback] = useState<MapCaptureFeedback>(null);
+  const pipeline = useWorldPipeline();
+  const { generationState } = pipeline;
+  const generationActive =
+    generationState.phase === "capturing" ||
+    generationState.phase === "submitting" ||
+    generationState.phase === "generating" ||
+    generationState.phase === "fetchingWorld";
 
   const handleStatusChange = useCallback((status: MapEditorStatus) => {
     setEditorStatus(status);
   }, []);
 
-  const handleBuildWorld = useCallback(() => {
+  const handleBuildWorld = useCallback(async () => {
     const dataUrl = mapEditorRef.current?.getImage();
     if (!dataUrl) {
       setFeedback("error");
@@ -37,7 +45,8 @@ export function MapEditorPanel() {
       );
     }
     setFeedback("captured");
-  }, []);
+    await pipeline.beginGeneration(dataUrl, pipeline.mode);
+  }, [pipeline]);
 
   const handleReset = useCallback(() => {
     mapEditorRef.current?.reset();
@@ -53,6 +62,9 @@ export function MapEditorPanel() {
       <MapEditorHeader
         editorReady={editorStatus === "ready"}
         feedback={feedback}
+        generation={generationState}
+        generationActive={generationActive}
+        onModeChange={pipeline.setMode}
         onReset={handleReset}
         onBuildWorld={handleBuildWorld}
       />
