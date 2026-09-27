@@ -145,6 +145,7 @@ export function ExperienceProvider({ children }: ExperienceProviderProps) {
       if (
         phase === "worldReady" &&
         generatedWorld &&
+        (state === "editing" || state === "generating") &&
         assetsReadyWorldId === generatedWorld.worldId
       ) {
         setState("world-ready");

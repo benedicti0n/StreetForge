@@ -159,7 +159,7 @@ function spawnAlongPath(
   // The vehicle's world forward is -Z; yaw rotates it onto the tangent.
   const yaw = Math.atan2(-tx, -tz);
   return {
-    position: [wx, ROAD_RAISE, wz],
+    position: [wx, ROAD_RAISE + 0.8, wz],
     yaw,
   };
 }
