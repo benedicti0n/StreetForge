@@ -140,6 +140,9 @@ export function ProceduralWorld({
     if (!waterContourWorld || waterContourWorld.length < 3) {
       return null;
     }
+    // The contour is in world [x, z] pairs; the shape maps them to its own
+    // (x, y) plane, so treat contour z as shape y, then fold it back into
+    // world z with the water surface at y = 0.015.
     const shape = new Shape();
     shape.moveTo(waterContourWorld[0][0], waterContourWorld[0][1]);
     for (let i = 1; i < waterContourWorld.length; i++) {
@@ -149,9 +152,12 @@ export function ProceduralWorld({
     const geometry = new ShapeGeometry(shape);
     const positions = geometry.attributes.position;
     for (let i = 0; i < positions.count; i++) {
+      const z = positions.getY(i);
       positions.setY(i, 0.015);
+      positions.setZ(i, z);
     }
     positions.needsUpdate = true;
+    geometry.computeVertexNormals();
     return geometry;
   }, [waterContourWorld]);
 
