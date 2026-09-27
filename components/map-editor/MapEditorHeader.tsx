@@ -101,8 +101,8 @@ export function MapEditorHeader({
             World Sketch
           </h1>
           <p className="truncate text-[11px] text-zinc-500">
-            Draw it. Drive it. Escape it. Forge your sketch into a playable
-            world.
+            Sketch a bold road. Add simple shapes for ramps and landmarks.
+            Keep shapes separated for the cleanest Forge result.
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-3">
