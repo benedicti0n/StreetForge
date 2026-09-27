@@ -25,8 +25,6 @@ import { semanticPointToWorld } from "@/lib/sketchworld/worldTransform";
 import { Shape, ShapeGeometry } from "three";
 import type { SafeSpawnResult } from "@/components/world/generated/SafeSpawnResolver";
 import {
-  cloneVariant,
-  computePlacement,
   getVariants,
   logWorldAssetStatus,
   normalizeModel,
@@ -34,12 +32,9 @@ import {
   scaleForHeight,
   useModelAnimation,
   useWorldAsset,
-  WORLD_ASSET_CONFIG,
   WORLD_ASSETS,
   type NormalizedModel,
 } from "@/lib/worldAssets";
-/** Road asset pieces are laid along the route every this many meters. */
-const ROAD_SEGMENT_SPACING = 8;
 
 const WALL_HEIGHT = 3.5;
 const WALL_THICKNESS = 1.2;
@@ -212,7 +207,6 @@ export function ProceduralWorld({
     handleReady();
   }, [handleReady]);
 
-  const roadAsset = useWorldAsset(WORLD_ASSETS.road);
   const treeAsset = useWorldAsset(WORLD_ASSETS.trees);
   const buildingAsset = useWorldAsset(WORLD_ASSETS.buildings);
   const waterAsset = useWorldAsset(WORLD_ASSETS.water);
@@ -238,45 +232,6 @@ export function ProceduralWorld({
     [rampAsset],
   );
   const waterModel = waterAsset ? normalizeModel(waterAsset) : null;
-  const roadModel = roadAsset ? normalizeModel(roadAsset) : null;
-
-  // Road asset pieces placed along the authoritative centerline. The painted
-  // base road stays underneath, so the drivable layout never changes.
-  const roadPlacements = useMemo(() => {
-    if (!roadModel) {
-      return null;
-    }
-    const placement = computePlacement(roadModel, "road");
-    const placements: Array<{
-      position: [number, number, number];
-      yaw: number;
-      scale: import("three").Vector3;
-    }> = [];
-    let travelled = 0;
-    let i = 1;
-    while (i < descriptor.road.points.length) {
-      const [x0, z0] = descriptor.road.points[i - 1];
-      const [x1, z1] = descriptor.road.points[i];
-      const dx = x1 - x0;
-      const dz = z1 - z0;
-      const seg = Math.hypot(dx, dz);
-      if (seg < 1e-4) {
-        i++;
-        continue;
-      }
-      travelled += seg;
-      if (travelled >= ROAD_SEGMENT_SPACING) {
-        travelled = 0;
-        placements.push({
-          position: [x1, placement.yOffset, z1],
-          yaw: Math.atan2(dx, dz),
-          scale: placement.scale,
-        });
-      }
-      i++;
-    }
-    return placements;
-  }, [roadModel, descriptor.road]);
 
   // Water region fit: the animated GLB is a 100 x 100 m plane, so it is
   // scaled uniformly to sit INSIDE the semantic region (subtle enhancement).
@@ -317,7 +272,6 @@ export function ProceduralWorld({
 
   // Dev-only asset diagnostics: one summary once every load has settled.
   const assetSettled =
-    roadAsset !== undefined &&
     treeAsset !== undefined &&
     buildingAsset !== undefined &&
     waterAsset !== undefined &&
@@ -327,7 +281,6 @@ export function ProceduralWorld({
       return;
     }
     logWorldAssetStatus([
-      { key: "road", value: roadAsset, variants: [] },
       { key: "trees", value: treeAsset, variants: treeVariants },
       { key: "buildings", value: buildingAsset, variants: buildingVariants },
       { key: "water", value: waterAsset, variants: [] },
@@ -379,7 +332,6 @@ export function ProceduralWorld({
       );
     }
     console.info("[streetforge] Forge placement\n" + lines.join("\n"));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [descriptor, waterTile]);
 
   return (
@@ -633,18 +585,9 @@ export function ProceduralWorld({
         );
       })}
 
-      {/* Road asset pieces along the generated route (base road stays) */}
-      {roadModel &&
-        roadPlacements?.map((placement, index) => (
-          <primitive
-            key={`road-piece-${index}`}
-            object={cloneVariant(roadModel.gltf, index)}
-            position={placement.position}
-            rotation={[0, placement.yaw + (WORLD_ASSET_CONFIG.road.rotationY ?? 0), 0]}
-            scale={placement.scale}
-            receiveShadow
-          />
-        ))}
+      {/* Road Template GLB is intentionally NOT rendered (see the
+          road-disable commit): the CanvasTexture road above is the
+          authoritative drivable surface. */}
 
       {/* Walls + caps */}
       {walls(descriptor.worldSize).map((wall, index) => (

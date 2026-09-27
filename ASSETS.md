@@ -25,10 +25,11 @@ fetched by the app. Download each model from the Sketchfab page
 
 ## How each model is used
 
-- **Road** — the Road Template GLB is tiled along the generated centerline
-  every 8 m on top of the painted CanvasTexture road, which stays underneath
-  as the authoritative drivable surface. (This is the pre-disable behaviour;
-  see the road-disable commit.)
+- **Road** — **disabled.** The Road Template GLB is a single 125 x 220 m
+  non-modular network and is not suitable for arbitrary AI-generated curved
+  paths, so it is NOT rendered in Forge mode. The painted CanvasTexture road
+  (asphalt + shoulder + center markings) is the authoritative surface and
+  the flat physics stay unchanged.
 - **Trees** — the trees pack is split into its individual low-poly variants
   at load time. For every vegetation region a limited number of interior
   points is sampled deterministically (small region 1-3 trees, medium 3-7,
