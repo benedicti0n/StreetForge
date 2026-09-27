@@ -298,7 +298,7 @@ export const PhysicsVehicle = forwardRef<
     );
   });
 
-  useFrame((state) => {
+  useFrame(() => {
     const body = rigidBodyRef.current;
     const controller = controllerRef.current;
     if (!body || !controller) {
