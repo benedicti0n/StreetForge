@@ -23,6 +23,7 @@ import {
   type VehicleId,
 } from "./vehicles/vehicleDefinitions";
 import type { PhysicsVehicleHandle } from "./vehicles/PhysicsVehicle";
+import type { ChaseTelemetry } from "./police/PoliceChaseController";
 import type { RapierRigidBody } from "@react-three/rapier";
 import {
   IDLE_CONTROLS,
@@ -97,6 +98,8 @@ export function WorldViewport() {
   );
   const playerTelemetryRef = useRef<VehicleTelemetry | null>(null);
   const policeTelemetryRef = useRef<VehicleTelemetry | null>(null);
+  const policeBodyRef = useRef<RapierRigidBody | null>(null);
+  const chaseTelemetryRef = useRef<ChaseTelemetry | null>(null);
 
   const handleEnterDriveMode = useCallback(() => {
     vehicleAudio.unlock();
@@ -221,6 +224,8 @@ export function WorldViewport() {
               playerBodyRef={playerBodyRef}
               playerTelemetryRef={playerTelemetryRef}
               policeTelemetryRef={policeTelemetryRef}
+              policeBodyRef={policeBodyRef}
+              chaseTelemetryRef={chaseTelemetryRef}
               driveMode={driveMode}
               onVehicleLoaded={handleVehicleLoaded}
               onVehicleLoadFailed={handleVehicleLoadFailed}

@@ -18,6 +18,10 @@ import { PhysicsWorld } from "./physics/PhysicsWorld";
 import { WorldCameraControls } from "./WorldCameraControls";
 import { VehicleFollowCamera } from "./camera/VehicleFollowCamera";
 import {
+  PoliceChaseController,
+  type ChaseTelemetry,
+} from "./police/PoliceChaseController";
+import {
   WORLD_FALL_RESET_Y,
   WORLD_RESET_BOUNDS,
   WORLD_SIZE,
@@ -55,6 +59,8 @@ interface WorldSceneProps {
   playerBodyRef?: RefObject<RapierRigidBody | null>;
   playerTelemetryRef?: RefObject<VehicleTelemetry | null>;
   policeTelemetryRef?: RefObject<VehicleTelemetry | null>;
+  policeBodyRef?: RefObject<RapierRigidBody | null>;
+  chaseTelemetryRef?: RefObject<ChaseTelemetry | null>;
   driveMode?: boolean;
   onVehicleLoaded?: () => void;
   onVehicleLoadFailed?: () => void;
@@ -68,6 +74,8 @@ export function WorldScene({
   playerBodyRef,
   playerTelemetryRef,
   policeTelemetryRef,
+  policeBodyRef,
+  chaseTelemetryRef,
   driveMode = false,
   onVehicleLoaded,
   onVehicleLoadFailed,
@@ -113,6 +121,13 @@ export function WorldScene({
         followCamera={false}
       />
       <PhysicsWorld>
+        <PoliceChaseController
+          active={driveMode}
+          playerBodyRef={playerBodyRef}
+          policeBodyRef={policeBodyRef}
+          policeControlsRef={vehicleControls.police}
+          telemetryRef={chaseTelemetryRef}
+        />
         <VehicleLoadErrorBoundary onFail={onVehicleLoadFailed}>
           <Suspense fallback={null}>
             {vehicles.map((id) => (
@@ -124,7 +139,9 @@ export function WorldScene({
                 isPlayer={id === "race"}
                 autoResetBelowY={WORLD_FALL_RESET_Y}
                 autoResetHalfExtent={WORLD_RESET_BOUNDS}
-                bodyRef={id === "race" ? playerBodyRef : undefined}
+                bodyRef={
+                  id === "race" ? playerBodyRef : policeBodyRef
+                }
                 telemetryRef={
                   id === "race" ? playerTelemetryRef : policeTelemetryRef
                 }
