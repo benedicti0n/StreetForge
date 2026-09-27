@@ -63,7 +63,7 @@ Sketchfab origin offsets leak into the world.
 | Path | Source | Notes |
 | --- | --- | --- |
 | `public/audio/engine.mp3` | [Lamborghini Urus Racing Sound Effect](https://pixabay.com/sound-effects/city-lamborghini-urus-racing-sound-effect-163336/) (Pixabay, mizanstock) | Already placed. Player engine sample; loops, gain/playback-rate follow speed and throttle. Unlocked from the START CHASE user gesture. |
-| `public/audio/police-siren.mp3` | (CC0, pre-existing) | Police siren sample; loops while a pursuit is active, fades out when it ends. Siren gain is hard-capped at 0.40 and distance attenuation lowers it further (near ≈ 0.40, far ≈ 0.10-0.25). Procedural siren is used only if the MP3 fails to load. |
+| `public/audio/police-siren.mp3` | (CC0, pre-existing) | Police siren sample; loops while a pursuit is active, fades out when it ends. Siren gain defaults to 50% (0.50) and distance attenuation lowers it further (near ≈ 0.50, far ≈ 0.13-0.25). Procedural siren is used only if the MP3 fails to load. |
 
 ## Development diagnostics
 

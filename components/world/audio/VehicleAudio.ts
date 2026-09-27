@@ -3,10 +3,10 @@
 const COLLISION_MIN_INTERVAL_MS = 140;
 const SKID_THRESHOLD_SPEED_KMH = 12;
 /**
- * Hard production ceiling for the police siren (its own gain node). Distance
- * attenuation only ever lowers this further - never above 0.40.
+ * Default police siren level (its own gain node): 50%. Distance attenuation
+ * only ever lowers this further - never above this ceiling.
  */
-const SIREN_MAX_GAIN = 0.4;
+const SIREN_MAX_GAIN = 0.5;
 
 class VehicleAudioEngine {
   private context: AudioContext | null = null;
@@ -131,7 +131,7 @@ class VehicleAudioEngine {
     if (!gain || !this.context) {
       return;
     }
-    // 0.25..1.0: near police -> full 0.40, far police -> ~0.10.
+    // 0.25..1.0: near police -> full 0.50, far police -> ~0.13.
     const factor = Math.min(1, Math.max(0.25, 1.2 - distanceMeters / 60));
     gain.gain.setTargetAtTime(factor, this.context.currentTime, 0.2);
   }
