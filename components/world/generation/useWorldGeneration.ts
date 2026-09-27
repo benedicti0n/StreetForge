@@ -29,8 +29,11 @@ export interface WorldGenerationState {
 interface WorldGenerationApi {
   state: WorldGenerationState;
   result: GeneratedWorldDescriptor | null;
-  /** Resolves true when THIS generation completed and produced a world. */
-  start(imageDataUrl: string, mode: GenerationMode): Promise<boolean>;
+  /** Resolves with the generated world descriptor, or null on failure/supersession. */
+  start(
+    imageDataUrl: string,
+    mode: GenerationMode,
+  ): Promise<GeneratedWorldDescriptor | null>;
   reset(): void;
 }
 
@@ -87,7 +90,10 @@ export function useWorldGeneration(): WorldGenerationApi {
   }, []);
 
   const start = useCallback(
-    async (imageDataUrl: string, mode: GenerationMode): Promise<boolean> => {
+    async (
+      imageDataUrl: string,
+      mode: GenerationMode,
+    ): Promise<GeneratedWorldDescriptor | null> => {
       const token = generationTokenRef.current + 1;
       generationTokenRef.current = token;
       abortControllerRef.current?.abort();
@@ -100,19 +106,19 @@ export function useWorldGeneration(): WorldGenerationApi {
       try {
         setState({ phase: "submitting", mode });
         const { operationId } = await submitGeneration(imageDataUrl, mode);
-        if (generationTokenRef.current !== token) return false;
+        if (generationTokenRef.current !== token) return null;
 
         setState({ phase: "generating", progress: 0, mode });
         const startedAt = Date.now();
         for (;;) {
-          if (controller.signal.aborted) return false;
+          if (controller.signal.aborted) return null;
           if (Date.now() - startedAt > WORLD_LABS.generationTimeoutMs) {
             throw new Error(
               "Generation is taking longer than expected. You can try again.",
             );
           }
           const status = await pollOperation(operationId, controller.signal);
-          if (generationTokenRef.current !== token) return false;
+          if (generationTokenRef.current !== token) return null;
 
           if (status.status === "processing") {
             setState({
@@ -137,7 +143,7 @@ export function useWorldGeneration(): WorldGenerationApi {
               progress: 100,
               mode,
             });
-            return true;
+            return status.world;
           }
           throw new Error("Generation completed without a world.");
         }
@@ -146,7 +152,7 @@ export function useWorldGeneration(): WorldGenerationApi {
           error instanceof DOMException &&
           error.name === "AbortError"
         ) {
-          return false;
+          return null;
         }
         setState({
           phase: "error",
@@ -156,7 +162,7 @@ export function useWorldGeneration(): WorldGenerationApi {
               ? error.message
               : "World generation failed.",
         });
-        return false;
+        return null;
       }
     },
     [],

@@ -9,6 +9,8 @@ import {
   type RefObject,
 } from "react";
 import { PhysicsVehicle, type PhysicsVehicleHandle } from "./vehicles/PhysicsVehicle";
+import { GeneratedWorld } from "./generated/GeneratedWorld";
+import type { GeneratedWorldDescriptor } from "@/lib/worldlabs/types";
 import { type VehicleId } from "./vehicles/vehicleDefinitions";
 import {
   type VehicleControlRef,
@@ -71,6 +73,8 @@ interface WorldSceneProps {
   policeBodyRef?: RefObject<RapierRigidBody | null>;
   chaseTelemetryRef?: RefObject<ChaseTelemetry | null>;
   driveMode?: boolean;
+  generatedWorld?: GeneratedWorldDescriptor | null;
+  onSplatReady?: () => void;
   onVehicleLoaded?: () => void;
   onVehicleLoadFailed?: () => void;
 }
@@ -86,6 +90,8 @@ export function WorldScene({
   policeBodyRef,
   chaseTelemetryRef,
   driveMode = false,
+  generatedWorld,
+  onSplatReady,
   onVehicleLoaded,
   onVehicleLoadFailed,
 }: WorldSceneProps) {
@@ -93,6 +99,12 @@ export function WorldScene({
     <>
       <color attach="background" args={["#101013"]} />
       <SparkWorldRenderer />
+      {generatedWorld && (
+        <GeneratedWorld
+          descriptor={generatedWorld}
+          onSplatReady={onSplatReady}
+        />
+      )}
       <WorldCameraControls controlsRef={controlsRef} enabled={!driveMode} />
       <VehicleFollowCamera
         bodyRef={playerBodyRef}

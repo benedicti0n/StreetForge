@@ -15,6 +15,7 @@ interface WorldViewportOverlayProps {
   onToggleSiren?: () => void;
   muted?: boolean;
   onToggleMute?: () => void;
+  loadingWorld?: boolean;
   loadingVehicles?: boolean;
   vehicleLoadFailed?: boolean;
 }
@@ -70,6 +71,7 @@ export function WorldViewportOverlay({
   onToggleSiren,
   muted = false,
   onToggleMute,
+  loadingWorld = false,
   loadingVehicles = false,
   vehicleLoadFailed = false,
 }: WorldViewportOverlayProps) {
@@ -204,7 +206,11 @@ export function WorldViewportOverlay({
             </div>
           </div>
         )}
-        {vehicleLoadFailed ? (
+        {loadingWorld ? (
+          <p className="text-[10px] uppercase tracking-[0.2em] text-zinc-500">
+            Loading world&hellip;
+          </p>
+        ) : vehicleLoadFailed ? (
           <p className="text-[10px] uppercase tracking-[0.2em] text-red-400/90">
             Vehicle models failed to load
           </p>

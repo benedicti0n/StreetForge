@@ -12,6 +12,7 @@ import {
   useState,
 } from "react";
 import { WorldScene } from "./WorldScene";
+import { useWorldPipeline } from "./generation/WorldPipeline";
 import { WorldViewportOverlay } from "./WorldViewportOverlay";
 import { useVehicleKeyboard } from "./controls/useVehicleKeyboard";
 import { useVehicleAudio } from "./audio/useVehicleAudio";
@@ -86,6 +87,23 @@ export function WorldViewport() {
   const [driveMode, setDriveMode] = useState(false);
   const [sirenActive, setSirenActive] = useState(false);
   const [muted, setMuted] = useState(false);
+  const pipeline = useWorldPipeline();
+  const [splatState, setSplatState] = useState<{
+    worldId: string;
+    ready: boolean;
+  }>({ worldId: "", ready: false });
+
+  const handleSplatReady = useCallback(() => {
+    setSplatState((state) => ({ ...state, ready: true }));
+  }, []);
+
+  const loadingWorld =
+    pipeline.generatedWorld !== null &&
+    !(
+      splatState.worldId === pipeline.generatedWorld.worldId &&
+      splatState.ready
+    );
+
   const vehicleControlsRef = useMemo(
     () =>
       Object.fromEntries(
@@ -227,6 +245,8 @@ export function WorldViewport() {
             gl={{ antialias: false }}
           >
             <WorldScene
+              generatedWorld={pipeline.generatedWorld}
+              onSplatReady={handleSplatReady}
               controlsRef={controlsRef}
               vehicles={SCENE_VEHICLES}
               vehicleControls={vehicleControlsRef}
@@ -248,6 +268,7 @@ export function WorldViewport() {
             onExitDriveMode={handleExitDriveMode}
             telemetryRef={playerTelemetryRef}
             chaseTelemetryRef={chaseTelemetryRef}
+            loadingWorld={loadingWorld}
             sirenActive={sirenActive}
             onToggleSiren={handleToggleSiren}
             muted={muted}

@@ -42,9 +42,9 @@ export function WorldPipelineProvider({ children }: { children: ReactNode }) {
   const beginGeneration = useCallback(
     async (imageDataUrl: string, requestedMode: GenerationMode) => {
       setMode(requestedMode);
-      const completed = await generation.start(imageDataUrl, requestedMode);
-      if (completed && generation.result) {
-        setGeneratedWorld(generation.result);
+      const world = await generation.start(imageDataUrl, requestedMode);
+      if (world) {
+        setGeneratedWorld(world);
       }
     },
     [generation],
