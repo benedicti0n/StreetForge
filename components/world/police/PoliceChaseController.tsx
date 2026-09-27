@@ -209,18 +209,19 @@ export function PoliceChaseController({
         const d = centerDistance;
         const strength = 1 - d / avoidance.avoidDistance;
         if (strength > 0) {
-          if (leftDistance === null && rightDistance === null) {
-            avoidanceSteering = 0;
-          } else if (leftDistance !== null && rightDistance === null) {
-            avoidanceSteering = 1;
-          } else if (leftDistance === null && rightDistance !== null) {
-            avoidanceSteering = -1;
-          } else {
+          const leftBlocked = leftDistance !== null;
+          const rightBlocked = rightDistance !== null;
+          if (leftBlocked && rightBlocked) {
             avoidanceSteering = clamp(
-              (rightDistance - leftDistance) / avoidance.probeDistance,
+              ((rightDistance ?? 0) - (leftDistance ?? 0)) /
+                avoidance.probeDistance,
               -1,
               1,
             );
+          } else if (leftBlocked) {
+            avoidanceSteering = 1;
+          } else if (rightBlocked) {
+            avoidanceSteering = -1;
           }
           avoidanceSteering *= clamp(strength, 0, 1);
         }
