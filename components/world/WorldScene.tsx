@@ -48,6 +48,45 @@ function SparkWorldRenderer() {
  * Lightweight built-in room environment used to give vehicle bodies gentle
  * reflections. No HDR downloads - three.js RoomEnvironment is procedural.
  */
+/**
+ * A simple stylized gradient sky dome (one textured backside sphere - no
+ * expensive sky systems).
+ */
+function GradientSky() {
+  const texture = useMemo(() => {
+    const canvas = document.createElement("canvas");
+    canvas.width = 8;
+    canvas.height = 256;
+    const context = canvas.getContext("2d");
+    if (!context) {
+      return null;
+    }
+    const gradient = context.createLinearGradient(0, 0, 0, 256);
+    gradient.addColorStop(0, "#6FB8E8");
+    gradient.addColorStop(0.55, "#A5D3F2");
+    gradient.addColorStop(1, "#D8EEFB");
+    context.fillStyle = gradient;
+    context.fillRect(0, 0, 8, 256);
+    const tex = new CanvasTexture(canvas);
+    tex.colorSpace = SRGBColorSpace;
+    return tex;
+  }, []);
+  if (!texture) {
+    return null;
+  }
+  return (
+    <mesh>
+      <sphereGeometry args={[900, 16, 12]} />
+      <meshBasicMaterial
+        map={texture}
+        side={BackSide}
+        fog={false}
+        depthWrite={false}
+      />
+    </mesh>
+  );
+}
+
 function SceneEnvironment() {
   const gl = useThree((state) => state.gl);
   const scene = useThree((state) => state.scene);
@@ -145,6 +184,7 @@ export function WorldScene({
       {proceduralWorld ? (
         <fog attach="fog" args={["#d8eefb", 150, 280]} />
       ) : null}
+      {proceduralWorld ? <GradientSky /> : null}
       <SceneEnvironment />
       <SparkWorldRenderer />
       <WorldCameraControls controlsRef={controlsRef} enabled={!followCameraActive} />
