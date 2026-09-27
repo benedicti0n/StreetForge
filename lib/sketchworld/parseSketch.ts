@@ -140,14 +140,67 @@ function connectedComponents(
  * a blob endpoint) and follows the highest-darkness unvisited neighbour,
  * preferring cells that continue the current heading.
  */
+/**
+ * Chamfer (3-4) distance transform over the blob: each cell holds its
+ * distance to the nearest non-blob cell. The road walk follows the highest
+ * distance values - the blob's medial ridge - so filled strokes, loops and
+ * rings all yield their true centreline instead of their outline.
+ */
+function medialDistance(
+  labels: Int32Array,
+  label: number,
+  grid: number,
+): Float32Array {
+  const INF = 1e9;
+  const dist = new Float32Array(grid * grid).fill(INF);
+  for (let i = 0; i < labels.length; i++) {
+    if (labels[i] === label) {
+      dist[i] = 0;
+    }
+  }
+  const relax = (x: number, y: number, dx: number, dy: number, cost: number) => {
+    const nx = x + dx;
+    const ny = y + dy;
+    if (nx < 0 || ny < 0 || nx >= grid || ny >= grid) {
+      return;
+    }
+    const index = ny * grid + nx;
+    if (labels[index] === label && dist[index] > dist[y * grid + x] + cost) {
+      dist[index] = dist[y * grid + x] + cost;
+    }
+  };
+  for (let y = 0; y < grid; y++) {
+    for (let x = 0; x < grid; x++) {
+      if (labels[y * grid + x] !== label) {
+        continue;
+      }
+      relax(x, y, -1, 0, 3);
+      relax(x, y, 0, -1, 3);
+      relax(x, y, -1, -1, 4);
+      relax(x, y, 1, -1, 4);
+    }
+  }
+  for (let y = grid - 1; y >= 0; y--) {
+    for (let x = grid - 1; x >= 0; x--) {
+      if (labels[y * grid + x] !== label) {
+        continue;
+      }
+      relax(x, y, 1, 0, 3);
+      relax(x, y, 0, 1, 3);
+      relax(x, y, -1, 1, 4);
+      relax(x, y, 1, 1, 4);
+    }
+  }
+  return dist;
+}
+
 function extractRoadPath(
-  darkness: Float32Array,
-  mask: Uint8Array,
   labels: Int32Array,
   label: number,
   grid: number,
 ): Array<[number, number]> {
   const visited = new Uint8Array(grid * grid);
+  const distance = medialDistance(labels, label, grid);
   const neighbours = (cx: number, cy: number) => {
     const out: Array<{ x: number; y: number; value: number }> = [];
     for (let dy = -1; dy <= 1; dy++) {
@@ -162,19 +215,19 @@ function extractRoadPath(
         }
         const index = ny * grid + nx;
         if (labels[index] === label && visited[index] === 0) {
-          out.push({ x: nx, y: ny, value: darkness[index] });
+          out.push({ x: nx, y: ny, value: distance[index] });
         }
       }
     }
     return out;
   };
 
-  // Start at the darkest cell of the blob.
+  // Start at the cell deepest inside the blob (the medial seed).
   let seed = -1;
   let seedValue = -1;
-  for (let i = 0; i < darkness.length; i++) {
-    if (labels[i] === label && darkness[i] > seedValue) {
-      seedValue = darkness[i];
+  for (let i = 0; i < distance.length; i++) {
+    if (labels[i] === label && distance[i] > seedValue) {
+      seedValue = distance[i];
       seed = i;
     }
   }
@@ -184,10 +237,7 @@ function extractRoadPath(
   const seedX = seed % grid;
   const seedY = (seed / grid) | 0;
 
-  const path: Array<[number, number]> = [[seedX, seedY]];
-  visited[seed] = 1;
-
-  const walk = (initialHeading: number) => {
+  const walk = (initialHeading: number, out: Array<[number, number]>) => {
     let cx = seedX;
     let cy = seedY;
     let heading = initialHeading;
@@ -198,83 +248,51 @@ function extractRoadPath(
       if (candidates.length === 0) {
         break;
       }
-      // Prefer the candidate that continues the current heading.
+      // Prefer the deepest medial cell; the heading is the tie-break.
       candidates.sort((a, b) => {
+        if (b.value !== a.value) {
+          return b.value - a.value;
+        }
         const angleA = Math.atan2(a.y - cy, a.x - cx);
         const angleB = Math.atan2(b.y - cy, b.x - cx);
         let deltaA = Math.abs(angleA - heading);
         let deltaB = Math.abs(angleB - heading);
         if (deltaA > Math.PI) deltaA = Math.PI * 2 - deltaA;
         if (deltaB > Math.PI) deltaB = Math.PI * 2 - deltaB;
-        if (deltaA === deltaB) {
-          return b.value - a.value;
-        }
         return deltaA - deltaB;
       });
       const next = candidates[0];
       cx = next.x;
       cy = next.y;
       visited[cy * grid + cx] = 1;
-      path.push([cx, cy]);
+      out.push([cx, cy]);
       heading = Math.atan2(cy - prevY, cx - prevX);
       prevX = cx;
       prevY = cy;
     }
   };
 
-  // Walk forward from the seed, then walk the reverse side by restarting
-  // from the seed in the opposite initial direction (handles loops and
-  // prevents doubling back over the same cells).
   const first = neighbours(seedX, seedY);
-  if (first.length > 0) {
-    const initialHeading = Math.atan2(first[0].y - seedY, first[0].x - seedX);
-    walk(initialHeading);
-    const visitedClone = Array.from(path);
-    visited.fill(0);
-    for (const [px, py] of visitedClone) {
-      visited[py * grid + px] = 1;
-    }
-    // Restart the walk from the seed toward the opposite side.
-    let reverseHeading = initialHeading + Math.PI;
-    if (reverseHeading > Math.PI) reverseHeading -= Math.PI * 2;
-    const reversePath: Array<[number, number]> = [];
-    let cx = seedX;
-    let cy = seedY;
-    let heading = reverseHeading;
-    for (let step = 0; step < grid * grid; step++) {
-      const candidates = neighbours(cx, cy);
-      if (candidates.length === 0) {
-        break;
-      }
-      candidates.sort((a, b) => {
-        const angleA = Math.atan2(a.y - cy, a.x - cx);
-        const angleB = Math.atan2(b.y - cy, b.x - cx);
-        let deltaA = Math.abs(angleA - heading);
-        let deltaB = Math.abs(angleB - heading);
-        if (deltaA > Math.PI) deltaA = Math.PI * 2 - deltaA;
-        if (deltaB > Math.PI) deltaB = Math.PI * 2 - deltaB;
-        if (deltaA === deltaB) {
-          return b.value - a.value;
-        }
-        return deltaA - deltaB;
-      });
-      const next = candidates[0];
-      cx = next.x;
-      cy = next.y;
-      visited[cy * grid + cx] = 1;
-      reversePath.push([cx, cy]);
-      if (reversePath.length > 1) {
-        const prev = reversePath[reversePath.length - 2];
-        heading = Math.atan2(cy - prev[1], cx - prev[0]);
-      }
-    }
-    // Reverse the reverse path so it reads seed -> outward, then prepend
-    // (dropping the duplicate seed cell at the joint).
-    reversePath.reverse();
-    const combined = [...reversePath, ...path.slice(1)];
-    return combined;
+  if (first.length === 0) {
+    return [[seedX, seedY]];
   }
-  return path;
+  const initialHeading = Math.atan2(first[0].y - seedY, first[0].x - seedX);
+  const forward: Array<[number, number]> = [[seedX, seedY]];
+  walk(initialHeading, forward);
+
+  // Reverse pass from the seed toward the other side (covers loops and the
+  // far end of open curves).
+  const visitedClone = new Uint8Array(visited);
+  visited.fill(0);
+  for (let i = 0; i < visitedClone.length; i++) {
+    visited[i] = visitedClone[i];
+  }
+  let reverseHeading = initialHeading + Math.PI;
+  if (reverseHeading > Math.PI) reverseHeading -= Math.PI * 2;
+  const reverse: Array<[number, number]> = [[seedX, seedY]];
+  walk(reverseHeading, reverse);
+  reverse.reverse();
+  return [...reverse, ...forward.slice(1)];
 }
 
 export async function parseSketch(dataUrl: string): Promise<ParsedSketch> {
@@ -329,7 +347,7 @@ export async function parseSketch(dataUrl: string): Promise<ParsedSketch> {
   const trees: Array<{ x: number; y: number }> = [];
 
   if (roadLabel !== -1) {
-    const path = extractRoadPath(darkness, mask, labels, roadLabel, grid);
+    const path = extractRoadPath(labels, roadLabel, grid);
     if (path.length >= 2) {
       roadPath.push(...path);
       roadWidthCells = Math.max(2, roadArea / path.length);
