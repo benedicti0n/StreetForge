@@ -81,6 +81,7 @@ export function GameOverlays({ telemetryRef, chaseTelemetryRef }: GameOverlaysPr
         <>
           <GameplayHud
             escapeProgress={experience.escapeProgress}
+            bustProgress={experience.bustProgress}
             reducedMotion={reduced}
           />
           <GoFlash reducedMotion={reduced} />
@@ -111,21 +112,34 @@ function ProgressBar({ progress, className }: { progress: number; className?: st
 
 function GameplayHud({
   escapeProgress,
+  bustProgress,
   reducedMotion: _reducedMotion,
 }: {
   escapeProgress: number;
+  bustProgress: number;
   reducedMotion: boolean;
 }) {
   const showEscape = escapeProgress > 0.04;
-  if (!showEscape) {
+  const showBust = bustProgress > 0.04;
+  if (!showEscape && !showBust) {
     return null;
+  }
+  if (showEscape) {
+    return (
+      <div className="absolute inset-x-0 bottom-14 flex flex-col items-center gap-1.5 px-6">
+        <p className="text-[10px] font-bold uppercase tracking-[0.35em] text-emerald-300">
+          Get Away
+        </p>
+        <ProgressBar progress={escapeProgress} className="max-w-[260px]" />
+      </div>
+    );
   }
   return (
     <div className="absolute inset-x-0 bottom-14 flex flex-col items-center gap-1.5 px-6">
-      <p className="text-[10px] font-bold uppercase tracking-[0.35em] text-emerald-300">
-        Get Away
+      <p className="text-[10px] font-bold uppercase tracking-[0.35em] text-red-300">
+        Police closing in
       </p>
-      <ProgressBar progress={escapeProgress} className="max-w-[260px]" />
+      <ProgressBar progress={bustProgress} className="max-w-[260px]" />
     </div>
   );
 }
