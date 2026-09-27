@@ -69,7 +69,8 @@ async function apiFetch<T>(
       500,
     );
   }
-  const response = await fetch(`${WORLD_LABS.apiBaseUrl}${path}`, {
+  const fullUrl = `${WORLD_LABS.apiBaseUrl}${path.startsWith("/") ? path : `/${path}`}`;
+  const response = await fetch(fullUrl, {
     ...init,
     headers: {
       "WLT-Api-Key": apiKey,
@@ -79,7 +80,8 @@ async function apiFetch<T>(
     cache: "no-store",
   });
   if (!response.ok) {
-    throw normalizeError(response.status, await response.text());
+    const rawBody = await response.text();
+    throw normalizeError(response.status, rawBody);
   }
   return (await response.json()) as T;
 }
