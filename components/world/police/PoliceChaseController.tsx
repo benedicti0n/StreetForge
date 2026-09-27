@@ -1,6 +1,6 @@
 "use client";
 
-import { useBeforePhysicsStep } from "@react-three/rapier";
+import { useBeforePhysicsStep, useRapier } from "@react-three/rapier";
 import type { RapierRigidBody } from "@react-three/rapier";
 import { useRef, type RefObject } from "react";
 import { Quaternion, Vector3 } from "three";
@@ -10,6 +10,7 @@ import {
   type VehicleControlRef,
 } from "@/components/world/vehicles/vehicleTypes";
 import { POLICE_CHASE } from "./policeChaseConfig";
+import { POLICE_AVOIDANCE } from "./policeAvoidanceConfig";
 
 export type ChaseState = "idle" | "pursuit" | "recovery";
 
@@ -30,6 +31,8 @@ const _predictedTarget = new Vector3();
 const _toTarget = new Vector3();
 const _policeForward = new Vector3();
 const _policeQuaternion = new Quaternion();
+const _probeDirection = new Vector3();
+const _up = new Vector3(0, 1, 0);
 
 const clamp = (value: number, min: number, max: number) =>
   Math.min(max, Math.max(min, value));
@@ -41,6 +44,7 @@ interface PoliceChaseControllerProps {
   policeControlsRef: VehicleControlRef;
   telemetryRef?: RefObject<ChaseTelemetry | null>;
   chaseConfig?: typeof POLICE_CHASE;
+  avoidanceConfig?: typeof POLICE_AVOIDANCE;
 }
 
 export function PoliceChaseController({
@@ -50,6 +54,7 @@ export function PoliceChaseController({
   policeControlsRef,
   telemetryRef,
   chaseConfig,
+  avoidanceConfig,
 }: PoliceChaseControllerProps) {
   const stateRef = useRef<ChaseState>("idle");
   const smoothedSteeringRef = useRef(0);
@@ -57,6 +62,8 @@ export function PoliceChaseController({
   const recoveryTimerRef = useRef(0);
   const recoverySteerSignRef = useRef<1 | -1>(1);
   const config = chaseConfig ?? POLICE_CHASE;
+  const avoidance = avoidanceConfig ?? POLICE_AVOIDANCE;
+  const { rapier } = useRapier();
 
   useBeforePhysicsStep((stepWorld) => {
     const police = policeBodyRef?.current;
@@ -140,6 +147,104 @@ export function PoliceChaseController({
 
     let state = stateRef.current;
 
+    // Lightweight local obstacle avoidance: three forward probes from the
+    // police bumper. Steep hits (drivable terrain/slopes) are ignored; wall
+    // hits steer toward the clearer probe and reduce speed when close.
+    let avoidanceSteering = 0;
+    let avoidanceSpeedPenalty = 0;
+    if (state === "pursuit") {
+      const policeRaw =
+        (police as unknown as { raw?: () => object }).raw?.() ?? null;
+      const playerRaw =
+        (player as unknown as { raw?: () => object }).raw?.() ?? null;
+      const filterProbeHit = (collider: { parent(): object | null }) => {
+        const body = collider.parent();
+        return body !== null && body !== policeRaw && body !== playerRaw;
+      };
+      _probeDirection.copy(_policeForward).normalize();
+      const probeOrigin = {
+        x: _policePosition.x + _policeForward.x * 1.5,
+        y: _policePosition.y + 1.2,
+        z: _policePosition.z + _policeForward.z * 1.5,
+      };
+      let centerDistance: number | null = null;
+      let leftDistance: number | null = null;
+      let rightDistance: number | null = null;
+      for (const probe of avoidance.probes) {
+        _probeDirection.copy(_policeForward).applyAxisAngle(_up, probe.angle);
+        _probeDirection.y = -0.06;
+        _probeDirection.normalize();
+        const ray = new rapier.Ray(
+          probeOrigin,
+          {
+            x: _probeDirection.x,
+            y: _probeDirection.y,
+            z: _probeDirection.z,
+          },
+        );
+        const hit = stepWorld.castRayAndGetNormal(
+          ray,
+          avoidance.probeDistance,
+          true,
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          filterProbeHit,
+        );
+        if (hit === null || hit.normal.y >= avoidance.obstacleNormalY) {
+          continue;
+        }
+        const hitDistance = hit.toi;
+        if (probe.angle === 0) {
+          centerDistance = hitDistance;
+        } else if (probe.angle < 0) {
+          leftDistance = hitDistance;
+        } else {
+          rightDistance = hitDistance;
+        }
+      }
+
+      if (centerDistance !== null) {
+        const d = centerDistance;
+        const strength = 1 - d / avoidance.avoidDistance;
+        if (strength > 0) {
+          if (leftDistance === null && rightDistance === null) {
+            avoidanceSteering = 0;
+          } else if (leftDistance !== null && rightDistance === null) {
+            avoidanceSteering = 1;
+          } else if (leftDistance === null && rightDistance !== null) {
+            avoidanceSteering = -1;
+          } else {
+            avoidanceSteering = clamp(
+              (rightDistance - leftDistance) / avoidance.probeDistance,
+              -1,
+              1,
+            );
+          }
+          avoidanceSteering *= clamp(strength, 0, 1);
+        }
+        if (d < avoidance.brakeDistance) {
+          avoidanceSpeedPenalty =
+            d < avoidance.hardBrakeDistance
+              ? 1
+              : (1 - d / avoidance.brakeDistance) * 0.8;
+        }
+      } else if (leftDistance !== null || rightDistance !== null) {
+        // No center obstacle but a flank is blocked: nudge toward the open side.
+        if (leftDistance !== null && rightDistance === null) {
+          avoidanceSteering = 1;
+        } else if (leftDistance === null && rightDistance !== null) {
+          avoidanceSteering = -1;
+        }
+        avoidanceSteering *= 0.35;
+      }
+    }
+
+    let throttle = 0;
+    let brake = 0;
+    let finalSteering = steering;
+
     if (state === "pursuit") {
       let desiredSpeed: number;
       if (distance > config.farDistance) {
@@ -165,9 +270,6 @@ export function PoliceChaseController({
 
       const throttleRequest = clamp((desiredSpeed - policeSpeed) / 8, 0.2, 1);
 
-      let throttle = 0;
-      let brake = 0;
-
       if (absError > config.brakeError) {
         if (policeSpeed < 4) {
           throttle = config.recoveryReverseThrottle * 0.7;
@@ -181,6 +283,15 @@ export function PoliceChaseController({
         brake = clamp((policeSpeed - desiredSpeed) / 6, 0.15, 0.7);
       } else {
         throttle = 0.12;
+      }
+
+      if (avoidanceSpeedPenalty > 0) {
+        throttle *= 1 - avoidanceSpeedPenalty;
+        if (avoidanceSpeedPenalty > 0.6) {
+          brake = Math.max(brake, 0.6);
+        } else {
+          brake = Math.max(brake, 0.15);
+        }
       }
 
       // Stuck detection: requesting throttle but barely moving.
@@ -202,13 +313,14 @@ export function PoliceChaseController({
         recoverySteerSignRef.current = Math.random() < 0.5 ? -1 : 1;
       }
 
-      smoothedSteeringRef.current = steering;
+      finalSteering = clamp(steering + avoidanceSteering, -1, 1);
+      smoothedSteeringRef.current = finalSteering;
 
       Object.assign(policeControlsRef.current, {
         ...NEUTRAL_CONTROLS,
         throttle,
         brake,
-        steering,
+        steering: finalSteering,
       });
     } else {
       // RECOVERY: reverse briefly while steering away from the previous heading.
