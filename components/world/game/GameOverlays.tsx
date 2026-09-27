@@ -1,9 +1,21 @@
 "use client";
 
-import type { RefObject } from "react";
+import { useEffect, useState, type RefObject } from "react";
 import { useExperience } from "./ExperienceProvider";
 import type { VehicleTelemetry } from "@/components/world/vehicles/vehicleTypes";
 import type { ChaseTelemetry } from "@/components/world/police/PoliceChaseController";
+
+function useReducedMotion(): boolean {
+  const [reduced, setReduced] = useState(false);
+  useEffect(() => {
+    const query = window.matchMedia("(prefers-reduced-motion: reduce)");
+    setReduced(query.matches);
+    const onChange = (event: MediaQueryListEvent) => setReduced(event.matches);
+    query.addEventListener("change", onChange);
+    return () => query.removeEventListener("change", onChange);
+  }, []);
+  return reduced;
+}
 
 interface GameOverlaysProps {
   telemetryRef?: RefObject<VehicleTelemetry | null>;
@@ -14,7 +26,8 @@ export function GameOverlays({ telemetryRef, chaseTelemetryRef }: GameOverlaysPr
   void telemetryRef;
   void chaseTelemetryRef;
   const experience = useExperience();
-  const { state } = experience;
+  const reduced = useReducedMotion();
+  const { state, countdownValue } = experience;
 
   return (
     <div
@@ -50,6 +63,41 @@ export function GameOverlays({ telemetryRef, chaseTelemetryRef }: GameOverlaysPr
           </div>
         </div>
       )}
+    {state === "countdown" && (
+        <div
+          key={countdownValue}
+          className={`text-center ${reduced ? "" : "animate-[sf-pop_0.9s_ease-out]"}`}
+        >
+          <p className="text-7xl font-black tabular-nums tracking-tight text-zinc-50 drop-shadow-[0_0_28px_rgba(217,119,6,0.55)]">
+            {countdownValue}
+          </p>
+          <p className="mt-2 text-[11px] font-semibold uppercase tracking-[0.4em] text-zinc-400">
+            The pursuit begins
+          </p>
+        </div>
+      )}
+
+      {state === "playing" && <GoFlash reducedMotion={reduced} />}
+    </div>
+  );
+}
+
+function GoFlash({ reducedMotion }: { reducedMotion: boolean }) {
+  const [showGo, setShowGo] = useState(true);
+  useEffect(() => {
+    const timer = window.setTimeout(() => setShowGo(false), 1100);
+    return () => window.clearTimeout(timer);
+  }, []);
+  if (!showGo) {
+    return null;
+  }
+  return (
+    <div
+      className={`text-center ${reducedMotion ? "" : "animate-[sf-pop_0.5s_ease-out]"}`}
+    >
+      <p className="text-6xl font-black tracking-tight text-emerald-400 drop-shadow-[0_0_28px_rgba(16,185,129,0.5)]">
+        GO
+      </p>
     </div>
   );
 }
