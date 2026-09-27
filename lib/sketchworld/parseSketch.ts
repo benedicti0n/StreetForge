@@ -112,6 +112,85 @@ function fillEnclosedInteriors(mask: Uint8Array, grid: number): void {
   }
 }
 
+/**
+ * Moore boundary trace: walks the outer contour of a blob as a single
+ * closed loop. Used as a road-path fallback for closed shapes whose medial
+ * axis branches (filled rectangles, outlined shapes).
+ */
+function traceBoundary(
+  mask: Uint8Array,
+  label: number,
+  labels: Int32Array,
+  grid: number,
+): Array<[number, number]> {
+  const inBounds = (x: number, y: number) =>
+    x >= 0 && y >= 0 && x < grid && y < grid;
+  // Seed: the leftmost-topmost blob cell.
+  let seed = -1;
+  for (let i = 0; i < labels.length; i++) {
+    if (labels[i] === label) {
+      seed = i;
+      break;
+    }
+  }
+  if (seed === -1) {
+    return [];
+  }
+  const seedX = seed % grid;
+  const seedY = (seed / grid) | 0;
+
+  const isBlob = (x: number, y: number) =>
+    inBounds(x, y) && labels[y * grid + x] === label;
+  const isBoundary = (x: number, y: number) =>
+    isBlob(x, y) &&
+    (!isBlob(x - 1, y) ||
+      !isBlob(x + 1, y) ||
+      !isBlob(x, y - 1) ||
+      !isBlob(x, y + 1));
+
+  const path: Array<[number, number]> = [[seedX, seedY]];
+  const visited = new Uint8Array(grid * grid);
+  visited[seed] = 1;
+  let cx = seedX;
+  let cy = seedY;
+  let direction = 0; // start heading east
+  const dirs = [
+    [1, 0],
+    [1, 1],
+    [0, 1],
+    [-1, 1],
+    [-1, 0],
+    [-1, -1],
+    [0, -1],
+    [1, -1],
+  ];
+  for (let step = 0; step < grid * grid; step++) {
+    let found = false;
+    // Prefer the direction that continues the previous turn.
+    for (let d = 0; d < 8; d++) {
+      const idx = (direction + d) % 8;
+      const nx = cx + dirs[idx][0];
+      const ny = cy + dirs[idx][1];
+      if (isBoundary(nx, ny) && visited[ny * grid + nx] === 0) {
+        cx = nx;
+        cy = ny;
+        visited[cy * grid + cx] = 1;
+        path.push([cx, cy]);
+        direction = (idx + 5) % 8; // keep the wall on the same side
+        found = true;
+        break;
+      }
+    }
+    if (!found) {
+      break;
+    }
+    if (cx === seedX && cy === seedY) {
+      break;
+    }
+  }
+  return path;
+}
+
 function connectedComponents(
   mask: Uint8Array,
   grid: number,
@@ -396,10 +475,22 @@ export async function parseSketch(dataUrl: string): Promise<ParsedSketch> {
   const trees: Array<{ x: number; y: number }> = [];
 
   if (roadLabel !== -1) {
-    const path = extractRoadPath(labels, roadLabel, grid);
-    if (path.length >= 2) {
-      roadPath.push(...path);
-      roadWidthCells = Math.max(2, roadArea / path.length);
+    const box = bounds[roadLabel];
+    const boxW = box.maxX - box.minX + 1;
+    const boxH = box.maxY - box.minY + 1;
+    const bboxDiag = Math.hypot(boxW, boxH);
+    const medial = extractRoadPath(labels, roadLabel, grid);
+    // Strokes and thin rings have a clean medial path. Filled or outlined
+    // closed shapes branch into a medial tree; fall back to the shape's
+    // outer boundary so the road stays one coherent loop.
+    const maxWalk = Math.max(80, bboxDiag * 2.2);
+    if (medial.length >= 2 && medial.length <= maxWalk) {
+      roadPath.push(...medial);
+    } else {
+      roadPath.push(...traceBoundary(mask, roadLabel, labels, grid));
+    }
+    if (roadPath.length >= 2) {
+      roadWidthCells = Math.max(2, roadArea / roadPath.length);
     }
   }
 
