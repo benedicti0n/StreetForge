@@ -19,12 +19,6 @@ export interface VehiclePhysicsConfig {
   wheelRadius: number;
   /** Body-local suspension connection points for each wheel. */
   wheelPositions: Record<WheelSlot, Vector3Tuple>;
-  /**
-   * "animated": wheels get corrective pivots + spin/steering/suspension
-   * visuals. "static": wheel meshes stay rigid children of the vehicle
-   * (used for models with unreliable wheel-container origins).
-   */
-  wheelVisualMode: "animated" | "static";
   suspensionRestLength: number;
   suspensionStiffness: number;
   suspensionCompression: number;
@@ -53,6 +47,12 @@ export interface VehicleDefinition {
   visualOffset: Vector3Tuple;
   /** Names of the four wheel container Object3D nodes in the GLB hierarchy. */
   wheelNodeNames: [string, string, string, string];
+  /**
+   * "animated": wheels get corrective pivots + spin/steering/suspension
+   * visuals. "static": wheel meshes stay rigid children of the vehicle
+   * (used for models with unreliable wheel-container origins).
+   */
+  wheelVisualMode: "animated" | "static";
   physics: VehiclePhysicsConfig;
 }
 
