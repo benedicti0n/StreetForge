@@ -1,12 +1,20 @@
 /**
  * Procedural world descriptor and builder.
  *
- * The parsed sketch is converted into a flat, stylized, playable world:
- * a road ribbon follows the drawn path, ramps/buildings/trees become clean
- * geometric props, and the spawn points sit on the road itself.
+ * The parsed sketch is converted into a flat, stylized, playable world.
+ * The primary supported road style is a ROAD CORRIDOR: the space between
+ * an outer and an inner black boundary. A stroke-path fallback is kept for
+ * simple thick-stroke drawings.
  */
 
 import type { ParsedSketch } from "./parseSketch";
+
+export interface RoadCorridor {
+  /** Corridor outer edge (world XZ). */
+  outer: Array<[number, number]>;
+  /** Corridor inner edge (world XZ), the road's hole. */
+  inner: Array<[number, number]>;
+}
 
 export interface ProceduralWorldDescriptor {
   kind: "procedural";
@@ -14,8 +22,15 @@ export interface ProceduralWorldDescriptor {
   caption: string;
   /** World footprint in metres (square). */
   worldSize: number;
-  /** Road centerline in world XZ metres. */
-  road: { points: Array<[number, number]>; width: number };
+  /**
+   * Road centerline in world XZ (used for markings and spawns). When the
+   * corridor form is present the asphalt covers the whole corridor area.
+   */
+  road: {
+    points: Array<[number, number]>;
+    width: number;
+    corridor: RoadCorridor | null;
+  };
   ramps: Array<{
     position: [number, number, number];
     width: number;
@@ -171,82 +186,51 @@ export async function buildProceduralWorld(
   const worldSize = PROCEDURAL_WORLD_SIZE;
   const { grid } = parsed;
 
-  let rawPath = parsed.roadPath.map(([x, y]) => gridToWorld(x, y, grid, worldSize));
-  if (rawPath.length < 4) {
-    rawPath = defaultRoadPath(worldSize);
-  }
-  // Extra smoothing pass keeps the road's layout while removing the coarse
-  // parser's grid steps; the resample then densifies corners smoothly.
-  let roadPoints = smoothPath(rawPath, 3);
-  roadPoints = resamplePath(roadPoints, 1.1);
+  let corridor: RoadCorridor | null = null;
+  let roadPoints: Array<[number, number]> = [];
+  let roadWidth = 8;
 
-  // Road width from the drawn stroke thickness (in cells -> world metres).
-  const widthCells = Math.max(2.5, parsed.roadWidthCells || 6);
-  const roadWidth = Math.min(
-    18,
-    Math.max(6, (widthCells / grid) * worldSize),
-  );
-
-  // Orient each ramp so its low edge faces the nearest road point.
-  const nearestRoadYaw = (wx: number, wz: number): number => {
-    let bestX = 0;
-    let bestZ = 0;
-    let bestDistance = Infinity;
-    for (let i = 0; i < roadPoints.length; i++) {
-      const [px, pz] = roadPoints[i];
-      const d = Math.hypot(px - wx, pz - wz);
-      if (d < bestDistance) {
-        bestDistance = d;
-        bestX = px;
-        bestZ = pz;
-      }
+  if (parsed.outerContour.length >= 4 && parsed.innerContour.length >= 4) {
+    // Corridor road: the asphalt is the area between the two boundaries.
+    const outerRaw = parsed.outerContour.map(([x, y]) =>
+      gridToWorld(x, y, grid, worldSize),
+    );
+    const innerRaw = parsed.innerContour.map(([x, y]) =>
+      gridToWorld(x, y, grid, worldSize),
+    );
+    corridor = {
+      outer: smoothPath(outerRaw, 2),
+      inner: smoothPath(innerRaw, 2),
+    };
+    const centerRaw = parsed.centerline.map(([x, y]) =>
+      gridToWorld(x, y, grid, worldSize),
+    );
+    roadPoints = resamplePath(smoothPath(centerRaw, 2), 1.1);
+    if (roadPoints.length < 4) {
+      roadPoints = defaultRoadPath(worldSize);
+      corridor = null;
     }
-    const dx = bestX - wx;
-    const dz = bestZ - wz;
-    return Math.atan2(-dx, -dz);
-  };
+  } else {
+    // Stroke-path fallback.
+    let rawPath = parsed.strokePath.map(([x, y]) =>
+      gridToWorld(x, y, grid, worldSize),
+    );
+    if (rawPath.length < 4) {
+      rawPath = defaultRoadPath(worldSize);
+    }
+    roadPoints = resamplePath(smoothPath(rawPath, 3), 1.1);
+    const widthCells = Math.max(2.5, parsed.strokeWidthCells || 6);
+    roadWidth = Math.min(18, Math.max(6, (widthCells / grid) * worldSize));
+  }
 
-  const ramps = parsed.ramps.map(({ x, y }) => {
-    const [wx, wz] = gridToWorld(x, y, grid, worldSize);
-    return {
-      position: [wx, ROAD_RAISE, wz] as [number, number, number],
-      width: 9,
-      depth: 11,
-      height: 2.6,
-      yaw: nearestRoadYaw(wx, wz),
-    };
-  });
+  // Props are intentionally disabled for the corridor road style: residual
+  // black components are road boundaries, not buildings.
+  const ramps: ProceduralWorldDescriptor["ramps"] = [];
+  const buildings: ProceduralWorldDescriptor["buildings"] = [];
+  const trees: ProceduralWorldDescriptor["trees"] = [];
 
-  // Building footprints reflect the drawn shape (clamped 4-25 m), with a
-  // modest deterministic height.
-  const buildings = parsed.buildings.map(
-    ({ x, y, widthCells, heightCells }) => {
-      const [wx, wz] = gridToWorld(x, y, grid, worldSize);
-      const toMeters = (cells: number) =>
-        Math.min(25, Math.max(4, (cells / grid) * worldSize));
-      const hash = Math.abs(Math.round(wx * 12.9898 + wz * 78.233) % 7);
-      return {
-        position: [wx, 0, wz] as [number, number, number],
-        size: [
-          toMeters(widthCells),
-          4 + hash,
-          toMeters(heightCells),
-        ] as [number, number, number],
-        yaw: 0,
-      };
-    },
-  );
-
-  const trees = parsed.trees.map(({ x, y }) => {
-    const [wx, wz] = gridToWorld(x, y, grid, worldSize);
-    return {
-      position: [wx, 0, wz] as [number, number, number],
-      scale: 0.8 + Math.random() * 0.6,
-    };
-  });
-
-  // Spawns sit on the road: player ahead, police ~12 m behind along the path.
-  const totalLength = Math.max(1, roadPoints.length * 1.6);
+  // Spawns sit on the road centerline: player ahead, police ~12 m behind.
+  const totalLength = Math.max(1, roadPoints.length * 1.1);
   const player = spawnAlongPath(roadPoints, SPAWN_PLAYER_ALONG);
   const police = spawnAlongPath(
     roadPoints,
@@ -261,7 +245,7 @@ export async function buildProceduralWorld(
     worldId: `local-${Date.now().toString(36)}`,
     caption: "A forged world built from your sketch.",
     worldSize,
-    road: { points: roadPoints, width: roadWidth },
+    road: { points: roadPoints, width: roadWidth, corridor },
     ramps,
     buildings,
     trees,

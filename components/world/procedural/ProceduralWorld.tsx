@@ -13,10 +13,12 @@ import {
 import type { ProceduralWorldDescriptor } from "@/lib/sketchworld/buildWorld";
 import {
   buildBox,
+  buildCorridorRing,
   buildDashPlacements,
   buildRoadRibbonWithShoulder,
   buildTreeGeometry,
   buildWedge,
+  inflateContour,
 } from "@/lib/sketchworld/geometry";
 import type { SafeSpawnResult } from "@/components/world/generated/SafeSpawnResolver";
 
@@ -84,18 +86,31 @@ export function ProceduralWorld({
 }: ProceduralWorldProps) {
   const { road, ramps, buildings, trees } = descriptor;
 
-  const roadGeometry = useMemo(
-    () =>
-      buildRoadRibbonWithShoulder(
-        road.points,
-        road.width,
-        road.width + 2.2,
+  const roadGeometry = useMemo(() => {
+    if (road.corridor) {
+      return buildCorridorRing(
+        road.corridor.outer,
+        road.corridor.inner,
         ROAD_RAISE,
-        [0.28, 0.28, 0.31],
-        [0.69, 0.65, 0.55],
-      ),
-    [road.points, road.width],
-  );
+      );
+    }
+    return buildRoadRibbonWithShoulder(
+      road.points,
+      road.width,
+      road.width + 2.2,
+      ROAD_RAISE,
+      [0.28, 0.28, 0.31],
+      [0.69, 0.65, 0.55],
+    );
+  }, [road.points, road.width, road.corridor]);
+  const shoulderGeometry = useMemo(() => {
+    if (!road.corridor) {
+      return null;
+    }
+    const outer = inflateContour(road.corridor.outer, 1.015);
+    const inner = inflateContour(road.corridor.inner, 0.985);
+    return buildCorridorRing(outer, inner, ROAD_RAISE - 0.03);
+  }, [road.corridor]);
   const wedgeGeometry = useMemo(() => buildWedge(9, 11, 2.6), []);
   const treeGeometry = useMemo(() => buildTreeGeometry(), []);
 

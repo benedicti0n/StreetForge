@@ -2,7 +2,12 @@
  * Geometry builders for the procedural sketch world.
  */
 
-import { BufferGeometry, Float32BufferAttribute } from "three";
+import {
+  BufferGeometry,
+  Float32BufferAttribute,
+  Shape,
+  ShapeGeometry,
+} from "three";
 
 /**
  * Builds a road ribbon with shoulder strips in a SINGLE geometry.
@@ -322,3 +327,62 @@ export function buildBox(
   geometry.computeVertexNormals();
   return geometry;
 }
+/**
+ * Builds the asphalt ring between an outer and an inner boundary contour
+ * (a THREE.Shape with a hole), triangulated by three.js. The road covers
+ * the full corridor the user drew.
+ */
+export function buildCorridorRing(
+  outer: Array<[number, number]>,
+  inner: Array<[number, number]>,
+  raiseY: number,
+): BufferGeometry {
+  const shape = new Shape();
+  shape.moveTo(outer[0][0], outer[0][1]);
+  for (let i = 1; i < outer.length; i++) {
+    shape.lineTo(outer[i][0], outer[i][1]);
+  }
+  shape.closePath();
+  if (inner.length >= 3) {
+    const hole = new Shape();
+    hole.moveTo(inner[0][0], inner[0][1]);
+    for (let i = 1; i < inner.length; i++) {
+      hole.lineTo(inner[i][0], inner[i][1]);
+    }
+    hole.closePath();
+    shape.holes.push(hole);
+  }
+  const geometry = new ShapeGeometry(shape);
+  // Raise the ring to the road height.
+  const positions = geometry.attributes.position;
+  for (let i = 0; i < positions.count; i++) {
+    positions.setY(i, raiseY);
+  }
+  positions.needsUpdate = true;
+  geometry.computeVertexNormals();
+  return geometry;
+}
+
+/** Inflates (or deflates) a contour about its centroid by a factor. */
+export function inflateContour(
+  points: Array<[number, number]>,
+  factor: number,
+): Array<[number, number]> {
+  if (points.length === 0) {
+    return points;
+  }
+  let cx = 0;
+  let cz = 0;
+  for (const [x, z] of points) {
+    cx += x;
+    cz += z;
+  }
+  cx /= points.length;
+  cz /= points.length;
+  return points.map(([x, z]) => [
+    cx + (x - cx) * factor,
+    cz + (z - cz) * factor,
+  ]);
+}
+
+
