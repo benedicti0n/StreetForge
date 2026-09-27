@@ -483,7 +483,7 @@ export async function parseSketch(dataUrl: string): Promise<ParsedSketch> {
     // Strokes and thin rings have a clean medial path. Filled or outlined
     // closed shapes branch into a medial tree; fall back to the shape's
     // outer boundary so the road stays one coherent loop.
-    const maxWalk = Math.max(80, bboxDiag * 2.2);
+    const maxWalk = Math.max(80, bboxDiag * 3.2);
     if (medial.length >= 2 && medial.length <= maxWalk) {
       roadPath.push(...medial);
     } else {
