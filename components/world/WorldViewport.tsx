@@ -537,6 +537,7 @@ export function WorldViewport() {
             onToggleSiren={handleToggleSiren}
             muted={muted}
             onToggleMute={handleToggleMute}
+            gameplayActive={gameplayActive}
             loadingVehicles={pendingVehicles > 0}
             vehicleLoadFailed={vehicleLoadFailed}
           />

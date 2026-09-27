@@ -7,6 +7,7 @@ import {
   writeSplatQuality,
   type SplatQuality,
 } from "@/lib/worldlabs/splatQuality";
+import { useExperience } from "@/components/world/game/ExperienceProvider";
 
 export type MapCaptureFeedback = "captured" | "error" | null;
 
@@ -49,6 +50,7 @@ export function MapEditorHeader({
   const [splatQuality, setSplatQuality] = useState<SplatQuality>(() =>
     readSplatQuality(),
   );
+  const experienceState = useExperience().state;
   const confirmTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -76,7 +78,12 @@ export function MapEditorHeader({
   };
 
   const step = STEP_LABELS[generation.phase];
-  const showProgress = generationActive || generation.phase === "error" || generation.phase === "worldReady";
+  const worldReadyStrip =
+    generation.phase === "worldReady" && experienceState === "world-ready";
+  const showProgress =
+    generationActive ||
+    generation.phase === "error" ||
+    worldReadyStrip;
 
   return (
     <div className="shrink-0 border-b border-edge bg-panel">
@@ -228,7 +235,7 @@ export function MapEditorHeader({
                 still safe. Try again.
               </p>
             )
-          ) : generation.phase === "worldReady" ? (
+          ) : worldReadyStrip ? (
             <p className="text-[11px] text-emerald-400">
               World forged. Start the chase from the viewport.
             </p>

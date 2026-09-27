@@ -7,6 +7,7 @@ import type { ChaseTelemetry } from "./police/PoliceChaseController";
 interface WorldViewportOverlayProps {
   onResetView: () => void;
   modeLabel?: string;
+  gameplayActive?: boolean;
   sandboxDrive?: boolean;
   onEnterSandboxDrive?: () => void;
   onExitSandboxDrive?: () => void;
@@ -68,6 +69,7 @@ function usePoliceDistance(
 export function WorldViewportOverlay({
   onResetView,
   modeLabel = "Sandbox",
+  gameplayActive = false,
   sandboxDrive = false,
   onEnterSandboxDrive,
   onExitSandboxDrive,
@@ -94,12 +96,16 @@ export function WorldViewportOverlay({
     >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.3em] text-zinc-400">
-            3D World
-          </p>
-          <p className="mt-0.5 text-[10px] uppercase tracking-[0.2em] text-zinc-600">
-            {modeLabel}
-          </p>
+          {!gameplayActive && (
+            <>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.3em] text-zinc-400">
+                3D World
+              </p>
+              <p className="mt-0.5 text-[10px] uppercase tracking-[0.2em] text-zinc-600">
+                {modeLabel}
+              </p>
+            </>
+          )}
         </div>
         <div className="flex shrink-0 items-center gap-2">
           <button
@@ -179,15 +185,17 @@ export function WorldViewportOverlay({
         </div>
       </div>
       <div className="flex items-center justify-between">
-        <p className="text-[10px] uppercase tracking-[0.2em] text-zinc-600">
-          {sandboxDrive ? (
-            <span className="text-zinc-500">
-              WASD Drive &bull; Space Handbrake &bull; R Reset &bull; Esc Inspect
-            </span>
-          ) : (
-            <>Orbit &bull; Pan &bull; Zoom</>
-          )}
-        </p>
+        {!gameplayActive && (
+          <p className="text-[10px] uppercase tracking-[0.2em] text-zinc-600">
+            {sandboxDrive ? (
+              <span className="text-zinc-500">
+                WASD Drive &bull; Space Handbrake &bull; R Reset &bull; Esc Inspect
+              </span>
+            ) : (
+              <>Orbit &bull; Pan &bull; Zoom</>
+            )}
+          </p>
+        )}
         {sandboxDrive && (
           <div className="flex items-baseline gap-3">
             <div className="flex items-baseline gap-2">
