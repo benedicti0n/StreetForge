@@ -3,9 +3,10 @@
 import { useState } from "react";
 
 /**
- * Quick pencil-color buttons for the Forge drawing language. Clicking a
- * button copies the semantic color code to the clipboard, so the user can
- * paste it into the editor's color field.
+ * Quick pencil-color buttons for the Forge drawing language. Each button is
+ * a color box with a label showing what the semantic color represents.
+ * Clicking a button copies the semantic color code to the clipboard, so the
+ * user can paste it into the editor's color field.
  */
 
 export const FORGE_PENCIL_COLORS = [
@@ -32,7 +33,7 @@ export function ForgeColorPalette() {
   };
 
   return (
-    <div className="flex shrink-0 items-center gap-2 border-t border-edge/60 bg-panel px-4 py-1.5">
+    <div className="flex shrink-0 items-center gap-2.5 border-t border-edge/60 bg-panel px-4 py-2">
       <span className="text-[9px] font-semibold uppercase tracking-[0.2em] text-zinc-500">
         Pencil
       </span>
@@ -43,20 +44,25 @@ export function ForgeColorPalette() {
           onClick={() => handlePick(color, label)}
           aria-label={`Copy the ${label} color code`}
           title={`Copy ${color} (${label})`}
-          className={`flex h-5 w-5 items-center justify-center rounded-full border transition-transform hover:scale-110 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent ${
-            selected === color
-              ? "border-accent ring-2 ring-accent/40"
-              : "border-zinc-600"
+          className={`flex flex-col items-center gap-1 rounded-md px-1.5 py-1 transition-transform hover:scale-105 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent ${
+            selected === color ? "bg-panel-raised ring-1 ring-accent/50" : ""
           }`}
-          style={{ backgroundColor: color }}
-        />
+        >
+          <span
+            className="block h-4 w-7 rounded-sm border border-zinc-500/70 shadow-sm"
+            style={{ backgroundColor: color }}
+          />
+          <span className="text-[8px] font-medium uppercase tracking-wide text-zinc-400">
+            {label}
+          </span>
+        </button>
       ))}
       <span className="ml-1 text-[9px] text-zinc-400">
         {copied
           ? `${copied} copied: ${
               FORGE_PENCIL_COLORS.find((entry) => entry.label === copied)?.color
             }`
-          : FORGE_PENCIL_COLORS.find((entry) => entry.color === selected)?.label}
+          : ""}
       </span>
     </div>
   );
