@@ -300,6 +300,11 @@ export function WorldViewport() {
           >
             <WorldScene
               generatedWorld={pipeline.generatedWorld}
+              colliderDebug={colliderDebug}
+              worldMode={pipeline.worldMode}
+              generatedSpawns={colliderInfo?.spawns ?? null}
+              generatedHalfExtent={colliderInfo?.halfExtent ?? null}
+              onColliderReady={handleColliderReady}
               onSplatReady={handleSplatReady}
               controlsRef={controlsRef}
               vehicles={SCENE_VEHICLES}
