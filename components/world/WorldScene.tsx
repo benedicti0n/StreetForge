@@ -74,6 +74,7 @@ interface WorldSceneProps {
   chaseTelemetryRef?: RefObject<ChaseTelemetry | null>;
   driveMode?: boolean;
   generatedWorld?: GeneratedWorldDescriptor | null;
+  colliderDebug?: boolean;
   onSplatReady?: () => void;
   onVehicleLoaded?: () => void;
   onVehicleLoadFailed?: () => void;
@@ -91,6 +92,7 @@ export function WorldScene({
   chaseTelemetryRef,
   driveMode = false,
   generatedWorld,
+  colliderDebug = false,
   onSplatReady,
   onVehicleLoaded,
   onVehicleLoadFailed,
@@ -99,12 +101,6 @@ export function WorldScene({
     <>
       <color attach="background" args={["#101013"]} />
       <SparkWorldRenderer />
-      {generatedWorld && (
-        <GeneratedWorld
-          descriptor={generatedWorld}
-          onSplatReady={onSplatReady}
-        />
-      )}
       <WorldCameraControls controlsRef={controlsRef} enabled={!driveMode} />
       <VehicleFollowCamera
         bodyRef={playerBodyRef}
@@ -143,6 +139,13 @@ export function WorldScene({
         followCamera={false}
       />
       <PhysicsWorld>
+        {generatedWorld && (
+          <GeneratedWorld
+            descriptor={generatedWorld}
+            colliderDebug={colliderDebug}
+            onSplatReady={onSplatReady}
+          />
+        )}
         <PoliceChaseController
           active={driveMode}
           playerBodyRef={playerBodyRef}

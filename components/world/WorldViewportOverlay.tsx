@@ -16,6 +16,8 @@ interface WorldViewportOverlayProps {
   muted?: boolean;
   onToggleMute?: () => void;
   loadingWorld?: boolean;
+  colliderDebug?: boolean;
+  onToggleColliderDebug?: () => void;
   loadingVehicles?: boolean;
   vehicleLoadFailed?: boolean;
 }
@@ -72,6 +74,8 @@ export function WorldViewportOverlay({
   muted = false,
   onToggleMute,
   loadingWorld = false,
+  colliderDebug = false,
+  onToggleColliderDebug,
   loadingVehicles = false,
   vehicleLoadFailed = false,
 }: WorldViewportOverlayProps) {
@@ -206,7 +210,27 @@ export function WorldViewportOverlay({
             </div>
           </div>
         )}
-        {loadingWorld ? (
+        {onToggleColliderDebug ? (
+          <button
+            type="button"
+            onClick={(event) => {
+              event.stopPropagation();
+              onToggleColliderDebug();
+            }}
+            aria-label={
+              colliderDebug
+                ? "Hide the generated collider overlay"
+                : "Show the generated collider overlay"
+            }
+            className={`pointer-events-auto rounded-md border px-2 py-1 text-[9px] font-medium uppercase tracking-[0.15em] transition-colors focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent ${
+              colliderDebug
+                ? "border-red-800 bg-red-950/50 text-red-300"
+                : "border-edge bg-panel-raised/80 text-zinc-500 hover:text-zinc-300"
+            }`}
+          >
+            Collider
+          </button>
+        ) : loadingWorld ? (
           <p className="text-[10px] uppercase tracking-[0.2em] text-zinc-500">
             Loading world&hellip;
           </p>

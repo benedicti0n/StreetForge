@@ -92,6 +92,7 @@ export function WorldViewport() {
     worldId: string;
     ready: boolean;
   }>({ worldId: "", ready: false });
+  const [colliderDebug, setColliderDebug] = useState(false);
 
   const handleSplatReady = useCallback(() => {
     setSplatState((state) => ({ ...state, ready: true }));
@@ -269,6 +270,8 @@ export function WorldViewport() {
             telemetryRef={playerTelemetryRef}
             chaseTelemetryRef={chaseTelemetryRef}
             loadingWorld={loadingWorld}
+            colliderDebug={colliderDebug}
+            onToggleColliderDebug={() => setColliderDebug((d) => !d)}
             sirenActive={sirenActive}
             onToggleSiren={handleToggleSiren}
             muted={muted}
