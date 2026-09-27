@@ -6,6 +6,7 @@ import type { ChaseTelemetry } from "./police/PoliceChaseController";
 
 interface WorldViewportOverlayProps {
   onResetView: () => void;
+  modeLabel?: string;
   sandboxDrive?: boolean;
   onEnterSandboxDrive?: () => void;
   onExitSandboxDrive?: () => void;
@@ -66,6 +67,7 @@ function usePoliceDistance(
 
 export function WorldViewportOverlay({
   onResetView,
+  modeLabel = "Sandbox",
   sandboxDrive = false,
   onEnterSandboxDrive,
   onExitSandboxDrive,
@@ -96,7 +98,7 @@ export function WorldViewportOverlay({
             3D World
           </p>
           <p className="mt-0.5 text-[10px] uppercase tracking-[0.2em] text-zinc-600">
-            Sandbox
+            {modeLabel}
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-2">

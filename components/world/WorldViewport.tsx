@@ -504,6 +504,25 @@ export function WorldViewport() {
           />
           <WorldViewportOverlay
             onResetView={handleResetView}
+            modeLabel={
+              pipeline.generationState.phase === "error"
+                ? "Generation failed"
+                : experienceState === "generating"
+                  ? "Forging world"
+                  : experienceState === "world-ready"
+                    ? "Generated world"
+                    : experienceState === "countdown"
+                      ? "Get ready"
+                      : experienceState === "playing"
+                        ? "Pursuit"
+                        : experienceState === "escaped"
+                          ? "Escaped"
+                          : experienceState === "busted"
+                            ? "Busted"
+                            : pipeline.worldMode === "generated"
+                              ? "Generated world"
+                              : "Sandbox"
+            }
             sandboxDrive={sandboxDrive}
             onEnterSandboxDrive={handleEnterSandboxDrive}
             onExitSandboxDrive={handleExitSandboxDrive}

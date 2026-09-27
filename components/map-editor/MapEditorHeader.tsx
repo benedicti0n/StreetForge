@@ -82,12 +82,15 @@ export function MapEditorHeader({
     <div className="shrink-0 border-b border-edge bg-panel">
       <header className="flex items-center justify-between gap-4 px-4 py-2.5">
         <div className="min-w-0">
+          <p className="truncate text-[9px] font-bold uppercase tracking-[0.35em] text-accent/80">
+            StreetForge
+          </p>
           <h1 className="truncate text-sm font-semibold uppercase tracking-[0.2em] text-zinc-200">
             World Sketch
           </h1>
           <p className="truncate text-[11px] text-zinc-500">
-            Sketch roads, terrain, ramps and landmarks. StreetForge will
-            interpret your layout.
+            Draw it. Drive it. Escape it. Sketch roads, terrain, ramps and
+            landmarks &mdash; StreetForge will interpret your layout.
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-3">
