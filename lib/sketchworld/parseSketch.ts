@@ -360,7 +360,7 @@ function medialDistance(
  * distance cells with a heading tie-break, forward then reverse from the
  * seed, producing one continuous loop/path.
  */
-function walkMedial(mask: Uint8Array, grid: number): Array<[number, number]> {
+export function walkMedial(mask: Uint8Array, grid: number): Array<[number, number]> {
   const visited = new Uint8Array(grid * grid);
   const distance = medialDistance(mask, grid);
   const neighbours = (cx: number, cy: number) => {
