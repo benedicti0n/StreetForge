@@ -5,11 +5,18 @@
  */
 
 import {
-  Color,
   SRGBColorSpace,
   Texture,
   CanvasTexture,
 } from "three";
+
+function hexRgb(hex: string): [number, number, number] {
+  return [
+    parseInt(hex.slice(1, 3), 16),
+    parseInt(hex.slice(3, 5), 16),
+    parseInt(hex.slice(5, 7), 16),
+  ];
+}
 
 export const TERRAIN_COLOR = "#93bd6f";
 export const SHOULDER_COLOR = "#bca676";
@@ -80,9 +87,11 @@ export function buildWorldTexture(
   const image = context.createImageData(textureSize, textureSize);
   const data = image.data;
 
-  const terrain = new Color(TERRAIN_COLOR);
-  const shoulder = new Color(SHOULDER_COLOR);
-  const asphalt = new Color(ASPHALT_COLOR);
+  // Raw sRGB bytes (three's Color converts hex into the linear working
+  // space, which would write visibly darker pixels).
+  const terrain = hexRgb(TERRAIN_COLOR);
+  const shoulder = hexRgb(SHOULDER_COLOR);
+  const asphalt = hexRgb(ASPHALT_COLOR);
 
   const shoulderMask = dilateRoadMask(roadMask, grid, 3);
   const scale = textureSize / grid;
@@ -98,19 +107,19 @@ export function buildWorldTexture(
       const cell = cy * grid + cx;
       const offset = (ty * textureSize + tx) * 4;
       if (roadMask[cell] === 1) {
-        data[offset] = Math.round(asphalt.r * 255);
-        data[offset + 1] = Math.round(asphalt.g * 255);
-        data[offset + 2] = Math.round(asphalt.b * 255);
+        data[offset] = asphalt[0];
+        data[offset + 1] = asphalt[1];
+        data[offset + 2] = asphalt[2];
         roadPixels++;
       } else if (shoulderMask[cell] === 1) {
-        data[offset] = Math.round(shoulder.r * 255);
-        data[offset + 1] = Math.round(shoulder.g * 255);
-        data[offset + 2] = Math.round(shoulder.b * 255);
+        data[offset] = shoulder[0];
+        data[offset + 1] = shoulder[1];
+        data[offset + 2] = shoulder[2];
         shoulderPixels++;
       } else {
-        data[offset] = Math.round(terrain.r * 255);
-        data[offset + 1] = Math.round(terrain.g * 255);
-        data[offset + 2] = Math.round(terrain.b * 255);
+        data[offset] = terrain[0];
+        data[offset + 1] = terrain[1];
+        data[offset + 2] = terrain[2];
         terrainPixels++;
       }
       data[offset + 3] = 255;
@@ -151,18 +160,6 @@ export function buildWorldTexture(
       context.stroke();
       i += gapLength / scale;
     }
-  }
-
-  // Development debug corner markers: NW red, NE green, SE blue, SW yellow.
-  if (process.env.NODE_ENV === "development") {
-    const marker = (gx: number, gy: number, color: string) => {
-      context.fillStyle = color;
-      context.fillRect(gx * scale - 4, gy * scale - 4, 8, 8);
-    };
-    marker(0, 0, "#ff0000");
-    marker(grid - 1, 0, "#00ff00");
-    marker(grid - 1, grid - 1, "#0000ff");
-    marker(0, grid - 1, "#ffff00");
   }
 
   const total = grid * grid;
