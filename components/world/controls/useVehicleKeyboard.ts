@@ -56,7 +56,9 @@ export function useVehicleKeyboard(
       const left = keys.has("KeyA") || keys.has("ArrowLeft");
       const right = keys.has("KeyD") || keys.has("ArrowRight");
       controlsRef.current.throttle = (up ? 1 : 0) - (down ? 1 : 0);
-      controlsRef.current.steering = (right ? 1 : 0) - (left ? 1 : 0);
+      // Canonical steering convention (shared with the police chase):
+      // steering > 0 = LEFT, steering < 0 = RIGHT.
+      controlsRef.current.steering = (left ? 1 : 0) - (right ? 1 : 0);
       controlsRef.current.handbrake = keys.has("Space") ? 1 : 0;
       controlsRef.current.brake = 0;
     };
