@@ -14,11 +14,13 @@ const LOOKAHEAD_MAX = 9;
 
 const _position = new Vector3();
 const _quaternion = new Quaternion();
+const _yawQuaternion = new Quaternion();
 const _desiredPosition = new Vector3();
 const _desiredLook = new Vector3();
 const _lookedAt = new Vector3();
 const _forward = new Vector3();
 const _rotated = new Vector3();
+const _upAxis = new Vector3(0, 1, 0);
 
 interface VehicleFollowCameraProps {
   bodyRef?: RefObject<RapierRigidBody | null>;
@@ -54,7 +56,12 @@ export function VehicleFollowCamera({
     _position.copy(body.translation() as unknown as Vector3);
     _quaternion.copy(body.rotation() as unknown as Quaternion);
 
-    _rotated.copy(CAMERA_OFFSET).applyQuaternion(_quaternion);
+    _forward.set(0, 0, 1).applyQuaternion(_quaternion);
+    _forward.y = 0;
+    const yaw = Math.atan2(_forward.x, _forward.z);
+    _yawQuaternion.setFromAxisAngle(_upAxis, yaw);
+
+    _rotated.copy(CAMERA_OFFSET).applyQuaternion(_yawQuaternion);
     _desiredPosition.copy(_position).add(_rotated);
 
     const speedKmh = telemetryRef?.current?.speedKmh ?? 0;
@@ -62,11 +69,11 @@ export function VehicleFollowCamera({
       LOOKAHEAD_MAX,
       LOOKAHEAD_MIN + (speedKmh / 165) * (LOOKAHEAD_MAX - LOOKAHEAD_MIN),
     );
+    _rotated.copy(LOOK_OFFSET).applyQuaternion(_yawQuaternion);
     _forward
       .copy(LOOKAHEAD_OFFSET)
       .multiplyScalar(lookAhead)
-      .applyQuaternion(_quaternion);
-    _rotated.copy(LOOK_OFFSET).applyQuaternion(_quaternion);
+      .applyQuaternion(_yawQuaternion);
     _desiredLook.copy(_position).add(_rotated).add(_forward);
 
     const positionFactor = 1 - Math.exp(-4.2 * delta);
