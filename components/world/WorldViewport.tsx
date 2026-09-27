@@ -167,7 +167,7 @@ export function WorldViewport() {
     const timer = window.setTimeout(() => {
       setWorldLoadError({
         worldId: pipeline.generatedWorld?.worldId ?? "",
-        message: "Generated world failed to load.",
+        message: "The generated world couldn't be loaded.",
       });
     }, WORLD_ASSET_LOAD_TIMEOUT_MS);
     return () => window.clearTimeout(timer);
@@ -360,6 +360,17 @@ export function WorldViewport() {
     [pipeline.generatedWorld],
   );
 
+  const handleColliderError = useCallback(() => {
+    const worldId = pipeline.generatedWorld?.worldId ?? "";
+    setColliderInfo((previous) =>
+      previous && previous.worldId === worldId ? previous : previous,
+    );
+    setWorldLoadError({
+      worldId,
+      message: "This world couldn't be made driveable.",
+    });
+  }, [pipeline.generatedWorld]);
+
   const handleResetPlayerVehicle = useCallback(() => {
     playerVehicleRef.current?.reset();
   }, []);
@@ -471,6 +482,7 @@ export function WorldViewport() {
               generatedSpawns={colliderInfo?.spawns ?? null}
               generatedHalfExtent={colliderInfo?.halfExtent ?? null}
               onColliderReady={handleColliderReady}
+              onColliderError={handleColliderError}
               onSplatReady={handleSplatReady}
               worldAssetKey={worldAssetKey}
               controlsRef={controlsRef}

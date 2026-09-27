@@ -214,10 +214,17 @@ export function MapEditorHeader({
           className="flex items-center gap-4 border-t border-edge/60 px-4 py-2"
         >
           {generation.phase === "error" ? (
-            <p className="text-[11px] text-red-400">
-              {generation.error ?? "World generation failed."} The current
-              sandbox remains playable. Try again.
-            </p>
+            generation.error?.includes("WLT_API_KEY") ? (
+              <p className="text-[11px] text-red-400">
+                World generation is unavailable. Check the server
+                configuration.
+              </p>
+            ) : (
+              <p className="text-[11px] text-red-400">
+                We couldn&rsquo;t forge this world. Your current world is
+                still safe. Try again.
+              </p>
+            )
           ) : generation.phase === "worldReady" ? (
             <p className="text-[11px] text-emerald-400">
               World forged. Start the chase from the viewport.

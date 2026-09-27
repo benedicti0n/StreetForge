@@ -84,6 +84,7 @@ interface WorldSceneProps {
   generatedHalfExtent?: number | null;
   worldAssetKey?: string;
   onColliderReady?: (spawns: SafeSpawnResult, halfExtent: number) => void;
+  onColliderError?: () => void;
   onSplatReady?: () => void;
   onVehicleLoaded?: () => void;
   onVehicleLoadFailed?: () => void;
@@ -109,6 +110,7 @@ export function WorldScene({
   generatedHalfExtent = null,
   worldAssetKey = "",
   onColliderReady,
+  onColliderError,
   onSplatReady,
   onVehicleLoaded,
   onVehicleLoadFailed,
@@ -168,6 +170,7 @@ export function WorldScene({
             colliderDebug={colliderDebug}
             onSplatReady={onSplatReady}
             onColliderReady={onColliderReady}
+            onColliderError={onColliderError}
           />
         )}
         <PoliceChaseController
