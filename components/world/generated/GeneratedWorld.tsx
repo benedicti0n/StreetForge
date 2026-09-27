@@ -1,9 +1,15 @@
 "use client";
 
-import { useCallback, useMemo } from "react";
+import { useCallback, useMemo, useState } from "react";
+import { Vector3 } from "three";
 import type { SplatMesh as SparkSplatMesh } from "@sparkjsdev/spark";
 import type { GeneratedWorldDescriptor } from "@/lib/worldlabs/types";
-import { createWorldTransform, selectSplatUrl } from "./worldTransform";
+import {
+  createWorldTransform,
+  selectSplatUrl,
+  type ResolvedWorldTransform,
+  type WorldTransform,
+} from "./worldTransform";
 import { WorldCollider } from "./WorldCollider";
 import type { SafeSpawnResult } from "./SafeSpawnResolver";
 
@@ -22,8 +28,26 @@ export function GeneratedWorld({
   onColliderReady,
   onColliderError,
 }: GeneratedWorldProps) {
-  const transform = useMemo(() => createWorldTransform(descriptor), [descriptor]);
+  const initialTransform = useMemo(
+    () => createWorldTransform(descriptor),
+    [descriptor],
+  );
+  const [resolved, setResolved] = useState<ResolvedWorldTransform | null>(null);
   const splatUrl = useMemo(() => selectSplatUrl(descriptor), [descriptor]);
+
+  // The collider resolves the final metric transform (semantics when
+  // present, measured fallback otherwise). The splat must use the SAME
+  // transform so both assets stay aligned.
+  const transform: WorldTransform = useMemo(() => {
+    if (!resolved) {
+      return initialTransform;
+    }
+    return {
+      position: new Vector3(0, -resolved.groundOffsetY, 0),
+      quaternion: initialTransform.quaternion,
+      scale: resolved.scale,
+    };
+  }, [resolved, initialTransform]);
 
   const handleLoad = useCallback(
     (mesh: SparkSplatMesh) => {
@@ -50,6 +74,7 @@ export function GeneratedWorld({
         descriptor={descriptor}
         debug={colliderDebug}
         onReady={onColliderReady}
+        onTransformResolved={setResolved}
         onError={onColliderError}
       />
     </>

@@ -52,9 +52,11 @@ export function WorldPipelineProvider({ children }: { children: ReactNode }) {
   );
 
   useEffect(() => {
-    const loadWorldId = (
-      globalThis as unknown as { __SF_LOAD_WORLD_ID?: string }
-    ).__SF_LOAD_WORLD_ID;
+    const loadWorldId =
+      (
+        globalThis as unknown as { __SF_LOAD_WORLD_ID?: string }
+      ).__SF_LOAD_WORLD_ID ??
+      new URLSearchParams(window.location.search).get("world");
     if (!loadWorldId || loadWorldId === generatedWorld?.worldId) {
       return;
     }

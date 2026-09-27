@@ -9,22 +9,16 @@ export interface WorldTransform {
   scale: number;
 }
 
+export interface ResolvedWorldTransform {
+  scale: number;
+  groundOffsetY: number;
+}
+
+/** Fallback target footprint (meters) when Marble omits metric semantics. */
+export const WORLD_FALLBACK_TARGET_SPAN = 160;
+
 const _upAxis = new Vector3(0, 1, 0);
 
-/**
- * Single source of truth for converting World Labs asset coordinates into
- * the StreetForge scene frame.
- *
- * Marble semantics: metric_xyz = raw_xyz * metric_scale_factor;
- * aligned_xyz = metric_xyz - (0, ground_plane_offset, 0).
- *
- * The splat and the collider share the SAME raw coordinate frame, so both
- * are transformed identically here and no per-asset drift is possible.
- *
- * Yaw orientation is a free choice (both assets rotate together). Modern
- * Marble worlds are already metric, ground-aligned (ground at y=0), so the
- * quaternion stays identity unless a documented correction is needed.
- */
 export function createWorldTransform(
   descriptor: GeneratedWorldDescriptor,
 ): WorldTransform {
@@ -33,6 +27,29 @@ export function createWorldTransform(
   const position = new Vector3(0, -groundOffset, 0);
   const quaternion = new Quaternion().setFromAxisAngle(_upAxis, 0);
   return { position, quaternion, scale };
+}
+
+/**
+ * Resolves the final metric transform for a world. When Marble provides
+ * semantics metadata it is authoritative. Otherwise the scale is derived
+ * from the collider footprint and the ground is aligned to the lowest
+ * collider point.
+ */
+export function resolveFallbackTransform(
+  rawSize: { x: number; y: number; z: number },
+  rawMinY: number,
+  descriptor: GeneratedWorldDescriptor,
+): ResolvedWorldTransform {
+  if (descriptor.metricScaleFactor !== undefined) {
+    return {
+      scale: descriptor.metricScaleFactor,
+      groundOffsetY: descriptor.groundPlaneOffset ?? 0,
+    };
+  }
+  const footprint = Math.max(Math.abs(rawSize.x), Math.abs(rawSize.z));
+  const scale = footprint > 0.001 ? WORLD_FALLBACK_TARGET_SPAN / footprint : 1;
+  const groundOffsetY = rawMinY * scale;
+  return { scale, groundOffsetY };
 }
 
 export function selectSplatUrl(

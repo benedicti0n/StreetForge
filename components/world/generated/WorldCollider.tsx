@@ -11,7 +11,12 @@ import {
   Vector3,
 } from "three";
 import type { GeneratedWorldDescriptor } from "@/lib/worldlabs/types";
-import { createWorldTransform, type WorldTransform } from "./worldTransform";
+import {
+  createWorldTransform,
+  resolveFallbackTransform,
+  type ResolvedWorldTransform,
+  type WorldTransform,
+} from "./worldTransform";
 import { findSafeSpawn, type SafeSpawnResult } from "./SafeSpawnResolver";
 
 const _vertex = new Vector3();
@@ -107,6 +112,7 @@ interface WorldColliderProps {
   descriptor: GeneratedWorldDescriptor;
   debug?: boolean;
   onReady?: (spawns: SafeSpawnResult, halfExtent: number) => void;
+  onTransformResolved?: (transform: ResolvedWorldTransform) => void;
   onError?: () => void;
 }
 
@@ -114,10 +120,14 @@ export function WorldCollider({
   descriptor,
   debug = false,
   onReady,
+  onTransformResolved,
   onError,
 }: WorldColliderProps) {
   const colliderUrl = descriptor.colliderUrl;
-  const transform = useMemo(() => createWorldTransform(descriptor), [descriptor]);
+  const initialTransform = useMemo(
+    () => createWorldTransform(descriptor),
+    [descriptor],
+  );
   const [scene, setScene] = useState<Object3D | null>(null);
   const [failed, setFailed] = useState(false);
 
@@ -147,6 +157,50 @@ export function WorldCollider({
     };
   }, [colliderUrl, onError]);
 
+  // Two-pass build: measure the raw collider in model units first, then
+  // resolve the final metric transform (authoritative semantics, or the
+  // measured fallback when Marble omits them) and rebuild the geometry so
+  // the collider and the splat share the same frame.
+  const rawResult = useMemo(() => {
+    if (!scene || failed) {
+      return null;
+    }
+    return buildColliderGeometry(scene, {
+      position: new Vector3(0, 0, 0),
+      quaternion: initialTransform.quaternion,
+      scale: 1,
+    });
+  }, [scene, failed, initialTransform.quaternion]);
+
+  const resolvedTransform = useMemo<ResolvedWorldTransform | null>(() => {
+    if (!rawResult) {
+      return null;
+    }
+    rawResult.geometry.computeBoundingBox();
+    const box = rawResult.geometry.boundingBox;
+    if (!box) {
+      return null;
+    }
+    const rawSize = new Vector3();
+    box.getSize(rawSize);
+    return resolveFallbackTransform(
+      { x: rawSize.x, y: rawSize.y, z: rawSize.z },
+      box.min.y,
+      descriptor,
+    );
+  }, [rawResult, descriptor]);
+
+  const transform = useMemo<WorldTransform>(() => {
+    if (!resolvedTransform) {
+      return initialTransform;
+    }
+    return {
+      position: new Vector3(0, -resolvedTransform.groundOffsetY, 0),
+      quaternion: initialTransform.quaternion,
+      scale: resolvedTransform.scale,
+    };
+  }, [resolvedTransform, initialTransform]);
+
   const result = useMemo(() => {
     if (!scene || failed) {
       return null;
@@ -175,10 +229,11 @@ export function WorldCollider({
   }, [result]);
 
   const handleReady = useCallback(() => {
-    if (worldInfo) {
+    if (worldInfo && resolvedTransform) {
       onReady?.(worldInfo.spawns, worldInfo.halfExtent);
+      onTransformResolved?.(resolvedTransform);
     }
-  }, [worldInfo, onReady]);
+  }, [worldInfo, resolvedTransform, onReady, onTransformResolved]);
 
   useEffect(() => {
     if (worldInfo) {
