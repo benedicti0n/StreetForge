@@ -1,0 +1,376 @@
+"use client";
+
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
+import { useWorldPipeline } from "@/components/world/generation/WorldPipeline";
+import type { WorldGenerationState } from "@/components/world/generation/useWorldGeneration";
+import {
+  BUST_CLOSE_DISTANCE_M,
+  BUST_COLLISION_MULTIPLIER,
+  BUST_CONTACT_WINDOW_MS,
+  BUST_DECAY_SECONDS,
+  BUST_HOLD_SECONDS,
+  BUST_SLOW_SPEED_KMH,
+  ESCAPE_DECAY_SECONDS,
+  ESCAPE_DISTANCE_FACTOR,
+  ESCAPE_DISTANCE_MAX,
+  ESCAPE_DISTANCE_MIN,
+  ESCAPE_HOLD_SECONDS,
+  ESCAPE_MIN_DISPLACEMENT_M,
+  ESCAPE_MIN_SPEED_KMH,
+  type ExperienceState,
+  type GameRefs,
+  type GameResultStats,
+  type GameWorldInfo,
+} from "./experienceState";
+
+const GENERATION_PHASES: WorldGenerationState["phase"][] = [
+  "capturing",
+  "submitting",
+  "generating",
+  "fetchingWorld",
+  "loadingWorld",
+];
+
+const COUNTDOWN_TOTAL_MS = 3000;
+const COUNTDOWN_TICK_MS = 1000;
+
+interface ExperienceApi {
+  state: ExperienceState;
+  countdownValue: number;
+  escapeProgress: number;
+  bustProgress: number;
+  result: GameResultStats | null;
+  gameplayActive: boolean;
+  introDismissed: boolean;
+  dismissIntro: () => void;
+  startChase: () => void;
+  runItBack: () => void;
+  editWorld: () => void;
+  pauseToWorldReady: () => void;
+  reportWorldAssetsReady: (worldId: string) => void;
+  registerGameRefs: (refs: GameRefs) => void;
+}
+
+const ExperienceContext = createContext<ExperienceApi | null>(null);
+
+export function useExperience(): ExperienceApi {
+  const value = useContext(ExperienceContext);
+  if (!value) {
+    throw new Error("useExperience must be used within ExperienceProvider.");
+  }
+  return value;
+}
+
+interface ExperienceProviderProps {
+  children: ReactNode;
+}
+
+export function ExperienceProvider({ children }: ExperienceProviderProps) {
+  const pipeline = useWorldPipeline();
+  const [state, setState] = useState<ExperienceState>("editing");
+  const [countdownValue, setCountdownValue] = useState(3);
+  const [escapeProgress, setEscapeProgress] = useState(0);
+  const [bustProgress, setBustProgress] = useState(0);
+  const [result, setResult] = useState<GameResultStats | null>(null);
+  const [introDismissed, setIntroDismissed] = useState(false);
+
+  const gameRefsRef = useRef<GameRefs | null>(null);
+  const assetsReadyWorldIdRef = useRef<string | null>(null);
+  const playingStartedAtRef = useRef(0);
+  const playingStartPositionRef = useRef<{
+    x: number;
+    z: number;
+  } | null>(null);
+  const statsRef = useRef({
+    peakSpeedKmh: 0,
+    closestPoliceMeters: Infinity,
+  });
+  const lastContactAtRef = useRef(0);
+
+  const phase = pipeline.generationState.phase;
+  const generatedWorld = pipeline.generatedWorld;
+
+  const registerGameRefs = useCallback((refs: GameRefs) => {
+    gameRefsRef.current = refs;
+  }, []);
+
+  const reportWorldAssetsReady = useCallback((worldId: string) => {
+    assetsReadyWorldIdRef.current = worldId;
+  }, []);
+
+  // Generation lifecycle → experience state.
+  useEffect(() => {
+    if (GENERATION_PHASES.includes(phase)) {
+      if (state === "editing" || state === "world-ready") {
+        setState("generating");
+      }
+      return;
+    }
+    if (phase === "error") {
+      setState("editing");
+      return;
+    }
+    if (phase === "editing") {
+      if (state === "generating") {
+        setState("editing");
+      }
+      return;
+    }
+    if (
+      phase === "worldReady" &&
+      generatedWorld &&
+      assetsReadyWorldIdRef.current === generatedWorld.worldId
+    ) {
+      setState("world-ready");
+    }
+  }, [phase, generatedWorld, state]);
+
+  const resetVehiclesAndProgress = useCallback(() => {
+    gameRefsRef.current?.playerVehicleRef.current?.reset();
+    gameRefsRef.current?.policeVehicleRef.current?.reset();
+    const chase = gameRefsRef.current?.chaseTelemetryRef.current;
+    if (chase) {
+      chase.distanceToPlayer = 0;
+      chase.state = "idle";
+    }
+    setEscapeProgress(0);
+    setBustProgress(0);
+    setResult(null);
+    statsRef.current = { peakSpeedKmh: 0, closestPoliceMeters: Infinity };
+  }, []);
+
+  const startChase = useCallback(() => {
+    if (state !== "world-ready") {
+      return;
+    }
+    resetVehiclesAndProgress();
+    setCountdownValue(3);
+    setState("countdown");
+  }, [state, resetVehiclesAndProgress]);
+
+  const runItBack = useCallback(() => {
+    resetVehiclesAndProgress();
+    setCountdownValue(3);
+    setState("countdown");
+  }, [resetVehiclesAndProgress]);
+
+  const editWorld = useCallback(() => {
+    setState("editing");
+    if (pipeline.worldMode !== "sandbox") {
+      pipeline.setWorldMode("sandbox");
+    }
+  }, [pipeline]);
+
+  const pauseToWorldReady = useCallback(() => {
+    if (state === "playing" || state === "countdown") {
+      setState("world-ready");
+    }
+  }, [state]);
+
+  const dismissIntro = useCallback(() => {
+    setIntroDismissed(true);
+  }, []);
+
+  // Countdown: 3 → 2 → 1 → GO → playing.
+  useEffect(() => {
+    if (state !== "countdown") {
+      return;
+    }
+    setCountdownValue(3);
+    let tick = 0;
+    const interval = window.setInterval(() => {
+      tick += 1;
+      const remaining = 3 - tick;
+      if (remaining > 0) {
+        setCountdownValue(remaining);
+        return;
+      }
+      window.clearInterval(interval);
+      playingStartedAtRef.current = performance.now();
+      const playerPosition = gameRefsRef.current?.playerBodyRef.current?.translation();
+      playingStartPositionRef.current = playerPosition
+        ? { x: playerPosition.x, z: playerPosition.z }
+        : null;
+      setState("playing");
+    }, COUNTDOWN_TICK_MS);
+    return () => window.clearInterval(interval);
+  }, [state]);
+
+  const finishGame = useCallback((outcome: "escaped" | "busted") => {
+    setState(outcome);
+    setResult({
+      outcome,
+      peakSpeedKmh: Math.round(statsRef.current.peakSpeedKmh),
+      durationSeconds: Math.max(
+        1,
+        Math.round((performance.now() - playingStartedAtRef.current) / 1000),
+      ),
+      closestPoliceMeters: Math.round(statsRef.current.closestPoliceMeters),
+    });
+    setEscapeProgress(0);
+    setBustProgress(0);
+  }, []);
+
+  // Escape / bust detection loop while playing.
+  useEffect(() => {
+    if (state !== "playing") {
+      return;
+    }
+    let raf = 0;
+    let last = performance.now();
+    const loop = () => {
+      const now = performance.now();
+      const dt = Math.min(0.1, (now - last) / 1000);
+      last = now;
+      const refs = gameRefsRef.current;
+      const chase = refs?.chaseTelemetryRef.current;
+      const playerTelemetry = refs?.playerTelemetryRef.current;
+      const policeTelemetry = refs?.policeTelemetryRef.current;
+      const worldInfo = refs?.worldInfoRef.current;
+
+      const distance = chase?.distanceToPlayer ?? Infinity;
+      const playerSpeedKmh = playerTelemetry?.speedKmh ?? 0;
+      const playerGrounded = (playerTelemetry?.groundedWheels ?? 0) > 0;
+      const policeContactImpact = policeTelemetry?.collisionImpact;
+      if (policeContactImpact !== undefined) {
+        lastContactAtRef.current = now;
+        if (policeTelemetry) {
+          policeTelemetry.collisionImpact = undefined;
+        }
+      }
+      const recentContact =
+        now - lastContactAtRef.current < BUST_CONTACT_WINDOW_MS;
+
+      statsRef.current.peakSpeedKmh = Math.max(
+        statsRef.current.peakSpeedKmh,
+        playerSpeedKmh,
+      );
+      if (Number.isFinite(distance)) {
+        statsRef.current.closestPoliceMeters = Math.min(
+          statsRef.current.closestPoliceMeters,
+          distance,
+        );
+      }
+
+      if (worldInfo) {
+        const escapeDistance = Math.min(
+          ESCAPE_DISTANCE_MAX,
+          Math.max(
+            ESCAPE_DISTANCE_MIN,
+            worldInfo.halfExtent * ESCAPE_DISTANCE_FACTOR,
+          ),
+        );
+        const playerPosition = refs?.playerBodyRef.current?.translation();
+        let displaced = true;
+        if (playerPosition && playingStartPositionRef.current) {
+          const dx = playerPosition.x - playingStartPositionRef.current.x;
+          const dz = playerPosition.z - playingStartPositionRef.current.z;
+          displaced = Math.hypot(dx, dz) > ESCAPE_MIN_DISPLACEMENT_M;
+        }
+        const playerActive =
+          playerGrounded &&
+          (playerSpeedKmh > ESCAPE_MIN_SPEED_KMH || displaced);
+
+        // ESCAPE
+        if (distance > escapeDistance && playerActive) {
+          setEscapeProgress((p) => p + dt / ESCAPE_HOLD_SECONDS);
+        } else {
+          setEscapeProgress((p) =>
+            Math.max(0, p - dt / ESCAPE_DECAY_SECONDS),
+          );
+        }
+
+        // BUST
+        const captureCondition =
+          distance < BUST_CLOSE_DISTANCE_M &&
+          playerSpeedKmh < BUST_SLOW_SPEED_KMH &&
+          playerGrounded;
+        if (captureCondition) {
+          setBustProgress((p) =>
+            p +
+            (dt / BUST_HOLD_SECONDS) *
+              (recentContact ? BUST_COLLISION_MULTIPLIER : 1),
+          );
+        } else {
+          setBustProgress((p) => Math.max(0, p - dt / BUST_DECAY_SECONDS));
+        }
+      }
+
+      setEscapeProgress((p) => {
+        if (p >= 1) {
+          finishGame("escaped");
+          return 0;
+        }
+        return p;
+      });
+      setBustProgress((p) => {
+        if (p >= 1) {
+          finishGame("busted");
+          return 0;
+        }
+        return p;
+      });
+      raf = requestAnimationFrame(loop);
+    };
+    raf = requestAnimationFrame(loop);
+    return () => cancelAnimationFrame(raf);
+  }, [state, finishGame]);
+
+  const gameplayActive =
+    state === "countdown" ||
+    state === "playing" ||
+    state === "escaped" ||
+    state === "busted";
+
+  const value = useMemo<ExperienceApi>(
+    () => ({
+      state,
+      countdownValue,
+      escapeProgress,
+      bustProgress,
+      result,
+      gameplayActive,
+      introDismissed,
+      dismissIntro,
+      startChase,
+      runItBack,
+      editWorld,
+      pauseToWorldReady,
+      reportWorldAssetsReady,
+      registerGameRefs,
+    }),
+    [
+      state,
+      countdownValue,
+      escapeProgress,
+      bustProgress,
+      result,
+      gameplayActive,
+      introDismissed,
+      dismissIntro,
+      startChase,
+      runItBack,
+      editWorld,
+      pauseToWorldReady,
+      reportWorldAssetsReady,
+      registerGameRefs,
+    ],
+  );
+
+  return (
+    <ExperienceContext.Provider value={value}>
+      {children}
+    </ExperienceContext.Provider>
+  );
+}
+
+export type { GameWorldInfo };

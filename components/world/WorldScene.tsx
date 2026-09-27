@@ -69,12 +69,14 @@ interface WorldSceneProps {
   vehicles?: VehicleId[];
   vehicleControls: Record<VehicleId, VehicleControlRef>;
   playerVehicleRef?: RefObject<PhysicsVehicleHandle | null>;
+  policeVehicleRef?: RefObject<PhysicsVehicleHandle | null>;
   playerBodyRef?: RefObject<RapierRigidBody | null>;
   playerTelemetryRef?: RefObject<VehicleTelemetry | null>;
   policeTelemetryRef?: RefObject<VehicleTelemetry | null>;
   policeBodyRef?: RefObject<RapierRigidBody | null>;
   chaseTelemetryRef?: RefObject<ChaseTelemetry | null>;
-  driveMode?: boolean;
+  followCameraActive?: boolean;
+  chaseActive?: boolean;
   generatedWorld?: GeneratedWorldDescriptor | null;
   colliderDebug?: boolean;
   worldMode?: WorldMode;
@@ -91,12 +93,14 @@ export function WorldScene({
   vehicles = [],
   vehicleControls,
   playerVehicleRef,
+  policeVehicleRef,
   playerBodyRef,
   playerTelemetryRef,
   policeTelemetryRef,
   policeBodyRef,
   chaseTelemetryRef,
-  driveMode = false,
+  followCameraActive = false,
+  chaseActive = false,
   generatedWorld,
   colliderDebug = false,
   worldMode = "sandbox",
@@ -111,11 +115,11 @@ export function WorldScene({
     <>
       <color attach="background" args={["#101013"]} />
       <SparkWorldRenderer />
-      <WorldCameraControls controlsRef={controlsRef} enabled={!driveMode} />
+      <WorldCameraControls controlsRef={controlsRef} enabled={!followCameraActive} />
       <VehicleFollowCamera
         bodyRef={playerBodyRef}
         telemetryRef={playerTelemetryRef}
-        active={driveMode}
+        active={followCameraActive}
       />
       <hemisphereLight args={["#c9ced6", "#17171a", 1.1]} />
       <directionalLight
@@ -164,7 +168,7 @@ export function WorldScene({
           />
         )}
         <PoliceChaseController
-          active={driveMode}
+          active={followCameraActive}
           playerBodyRef={playerBodyRef}
           policeBodyRef={policeBodyRef}
           policeControlsRef={vehicleControls.police}
@@ -175,7 +179,7 @@ export function WorldScene({
             {vehicles.map((id) => (
               <PhysicsVehicle
                 key={id}
-                ref={id === "race" ? playerVehicleRef : undefined}
+                ref={id === "race" ? playerVehicleRef : policeVehicleRef}
                 vehicle={id}
                 controls={vehicleControls[id]}
                 isPlayer={id === "race"}

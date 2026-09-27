@@ -31,6 +31,8 @@ export interface VehicleTelemetry {
   throttle: number;
   handbrake: number;
   lateralSlip: number;
+  /** Number of wheels currently in contact with the ground (0-4). */
+  groundedWheels: number;
   /** Impact speed (m/s) of the most recent collision, cleared by consumers. */
   collisionImpact?: number;
 }

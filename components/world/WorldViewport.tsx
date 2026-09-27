@@ -13,6 +13,8 @@ import {
 } from "react";
 import { WorldScene } from "./WorldScene";
 import { useWorldPipeline } from "./generation/WorldPipeline";
+import { useExperience } from "./game/ExperienceProvider";
+import type { GameRefs, GameWorldInfo } from "./game/experienceState";
 import { WorldViewportOverlay } from "./WorldViewportOverlay";
 import { useVehicleKeyboard } from "./controls/useVehicleKeyboard";
 import { useVehicleAudio } from "./audio/useVehicleAudio";
@@ -81,16 +83,18 @@ export function WorldViewport() {
   const controlsRef = useRef<ControlsRef>(null);
   const viewportRef = useRef<HTMLElement>(null);
   const playerVehicleRef = useRef<PhysicsVehicleHandle | null>(null);
+  const policeVehicleRef = useRef<PhysicsVehicleHandle | null>(null);
   const playerBodyRef = useRef<RapierRigidBody | null>(null);
   const [webglAvailable, setWebglAvailable] = useState<boolean | null>(null);
   const [pendingVehicles, setPendingVehicles] = useState(
     SCENE_VEHICLES.length,
   );
   const [vehicleLoadFailed, setVehicleLoadFailed] = useState(false);
-  const [driveMode, setDriveMode] = useState(false);
+  const [sandboxDrive, setSandboxDrive] = useState(false);
   const [sirenActive, setSirenActive] = useState(false);
   const [muted, setMuted] = useState(false);
   const pipeline = useWorldPipeline();
+  const experience = useExperience();
   const [splatState, setSplatState] = useState<{
     worldId: string;
     ready: boolean;
@@ -106,6 +110,8 @@ export function WorldViewport() {
     halfExtent: number;
   } | null>(null);
   const previousPhaseRef = useRef(pipeline.generationState.phase);
+
+  const { state: experienceState, gameplayActive } = experience;
 
   const handleSplatReady = useCallback(() => {
     setSplatState({
@@ -141,6 +147,13 @@ export function WorldViewport() {
     splatState.ready &&
     colliderInfo?.worldId === pipeline.generatedWorld.worldId;
 
+  // Report asset readiness to the experience state machine.
+  useEffect(() => {
+    if (worldReadyForGenerated && pipeline.generatedWorld) {
+      experience.reportWorldAssetsReady(pipeline.generatedWorld.worldId);
+    }
+  }, [worldReadyForGenerated, pipeline.generatedWorld, experience]);
+
   useEffect(() => {
     if (!pipeline.generatedWorld) {
       return;
@@ -157,6 +170,17 @@ export function WorldViewport() {
     return () => window.clearTimeout(timer);
   }, [pipeline.generatedWorld, worldReadyForGenerated]);
 
+  // On asset-load failure the experience returns to editing.
+  useEffect(() => {
+    if (
+      activeWorldError !== null &&
+      experienceState === "generating" &&
+      pipeline.generationState.phase === "worldReady"
+    ) {
+      pipeline.resetGeneration();
+    }
+  }, [activeWorldError, experienceState, pipeline]);
+
   const vehicleControlsRef = useMemo(
     () =>
       Object.fromEntries(
@@ -171,16 +195,46 @@ export function WorldViewport() {
   const policeTelemetryRef = useRef<VehicleTelemetry | null>(null);
   const policeBodyRef = useRef<RapierRigidBody | null>(null);
   const chaseTelemetryRef = useRef<ChaseTelemetry | null>(null);
+  const worldInfoRef = useRef<GameWorldInfo | null>(null);
 
-  const handleEnterDriveMode = useCallback(() => {
+  // Register all gameplay refs with the experience provider.
+  useEffect(() => {
+    experience.registerGameRefs({
+      playerVehicleRef,
+      policeVehicleRef,
+      playerBodyRef,
+      policeBodyRef,
+      playerTelemetryRef,
+      policeTelemetryRef,
+      chaseTelemetryRef,
+      worldInfoRef,
+    } satisfies GameRefs);
+  }, [experience]);
+
+  // Keep the world info (bounds + spawns) available to the game logic.
+  useEffect(() => {
+    if (!colliderInfo || colliderInfo.worldId !== pipeline.generatedWorld?.worldId) {
+      return;
+    }
+    worldInfoRef.current = {
+      halfExtent: colliderInfo.halfExtent,
+      playerSpawn: colliderInfo.spawns.player.position,
+      policeSpawn: colliderInfo.spawns.police.position,
+    };
+  }, [colliderInfo, pipeline.generatedWorld]);
+
+  const handleEnterSandboxDrive = useCallback(() => {
+    if (experienceState !== "editing") {
+      return;
+    }
     vehicleAudio.unlock();
-    setDriveMode(true);
+    setSandboxDrive(true);
     setSirenActive(true);
     vehicleAudio.setSirenActive(true);
-  }, []);
+  }, [experienceState]);
 
-  const handleExitDriveMode = useCallback(() => {
-    setDriveMode(false);
+  const handleExitSandboxDrive = useCallback(() => {
+    setSandboxDrive(false);
     setSirenActive(false);
     vehicleAudio.setSirenActive(false);
   }, []);
@@ -201,21 +255,47 @@ export function WorldViewport() {
     });
   }, []);
 
+  // Siren lifecycle driven by the experience state.
+  useEffect(() => {
+    if (experienceState === "playing") {
+      vehicleAudio.unlock();
+      setSirenActive(true);
+      vehicleAudio.setSirenActive(true);
+      return;
+    }
+    if (experienceState === "escaped") {
+      setSirenActive(false);
+      vehicleAudio.setSirenActive(false);
+      return;
+    }
+    if (experienceState === "busted") {
+      const timer = window.setTimeout(() => {
+        setSirenActive(false);
+        vehicleAudio.setSirenActive(false);
+      }, 1600);
+      return () => window.clearTimeout(timer);
+    }
+    if (experienceState === "countdown") {
+      setSirenActive(false);
+      vehicleAudio.setSirenActive(false);
+    }
+  }, [experienceState]);
+
   useEffect(() => {
     const phase = pipeline.generationState.phase;
     if (
       generationActive &&
       previousPhaseRef.current !== phase &&
-      driveMode
+      sandboxDrive
     ) {
-      handleExitDriveMode();
+      handleExitSandboxDrive();
     }
     previousPhaseRef.current = phase;
   }, [
     pipeline.generationState.phase,
     generationActive,
-    driveMode,
-    handleExitDriveMode,
+    sandboxDrive,
+    handleExitSandboxDrive,
   ]);
 
   useEffect(() => {
@@ -241,8 +321,15 @@ export function WorldViewport() {
     playerVehicleRef.current?.reset();
   }, []);
 
+  const handleExitGameplay = useCallback(() => {
+    // ESC during a chase returns to inspect (world-ready).
+    experience.pauseToWorldReady();
+  }, [experience]);
+
+  // During gameplay the viewport is full-bleed; only the sandbox drive
+  // exits on outside clicks.
   useEffect(() => {
-    if (!driveMode) {
+    if (!sandboxDrive) {
       return;
     }
     const handlePointerDown = (event: PointerEvent) => {
@@ -251,19 +338,22 @@ export function WorldViewport() {
         return;
       }
       if (!viewportRef.current.contains(target)) {
-        setDriveMode(false);
+        setSandboxDrive(false);
       }
     };
     document.addEventListener("pointerdown", handlePointerDown, true);
     return () =>
       document.removeEventListener("pointerdown", handlePointerDown, true);
-  }, [driveMode]);
+  }, [sandboxDrive]);
+
+  const playerControlsEnabled =
+    experienceState === "playing" || sandboxDrive;
 
   useVehicleKeyboard(
     vehicleControlsRef.race,
-    driveMode,
+    playerControlsEnabled,
     handleResetPlayerVehicle,
-    handleExitDriveMode,
+    experienceState === "playing" ? handleExitGameplay : handleExitSandboxDrive,
   );
 
   useEffect(() => {
@@ -314,7 +404,7 @@ export function WorldViewport() {
         if (target?.closest("[data-viewport-overlay]")) {
           return;
         }
-        handleEnterDriveMode();
+        handleEnterSandboxDrive();
       }}
     >
       {webglAvailable === false ? (
@@ -343,21 +433,23 @@ export function WorldViewport() {
               vehicles={SCENE_VEHICLES}
               vehicleControls={vehicleControlsRef}
               playerVehicleRef={playerVehicleRef}
+              policeVehicleRef={policeVehicleRef}
               playerBodyRef={playerBodyRef}
               playerTelemetryRef={playerTelemetryRef}
               policeTelemetryRef={policeTelemetryRef}
               policeBodyRef={policeBodyRef}
               chaseTelemetryRef={chaseTelemetryRef}
-              driveMode={driveMode}
+              followCameraActive={sandboxDrive || gameplayActive}
+              chaseActive={experienceState === "playing"}
               onVehicleLoaded={handleVehicleLoaded}
               onVehicleLoadFailed={handleVehicleLoadFailed}
             />
           </Canvas>
           <WorldViewportOverlay
             onResetView={handleResetView}
-            driveMode={driveMode}
-            onEnterDriveMode={handleEnterDriveMode}
-            onExitDriveMode={handleExitDriveMode}
+            sandboxDrive={sandboxDrive}
+            onEnterSandboxDrive={handleEnterSandboxDrive}
+            onExitSandboxDrive={handleExitSandboxDrive}
             telemetryRef={playerTelemetryRef}
             chaseTelemetryRef={chaseTelemetryRef}
             loadingWorld={loadingWorld}

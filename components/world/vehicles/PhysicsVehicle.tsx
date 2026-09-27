@@ -323,12 +323,19 @@ export const PhysicsVehicle = forwardRef<
         linvel.y * _rightVector.y +
         linvel.z * _rightVector.z,
     );
+    let groundedWheels = 0;
+    for (let i = 0; i < controller.numWheels(); i++) {
+      if (controller.wheelIsInContact(i)) {
+        groundedWheels += 1;
+      }
+    }
     const telemetry: VehicleTelemetry = {
       speedKmh: Math.abs(controller.currentVehicleSpeed()) * 3.6,
       steering: control.steering,
       throttle: control.throttle,
       handbrake: control.handbrake,
       lateralSlip,
+      groundedWheels,
     };
     onTelemetry?.(telemetry);
     if (telemetryRef) {

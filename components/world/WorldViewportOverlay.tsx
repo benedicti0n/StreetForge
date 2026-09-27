@@ -6,9 +6,9 @@ import type { ChaseTelemetry } from "./police/PoliceChaseController";
 
 interface WorldViewportOverlayProps {
   onResetView: () => void;
-  driveMode?: boolean;
-  onEnterDriveMode?: () => void;
-  onExitDriveMode?: () => void;
+  sandboxDrive?: boolean;
+  onEnterSandboxDrive?: () => void;
+  onExitSandboxDrive?: () => void;
   telemetryRef?: RefObject<VehicleTelemetry | null>;
   chaseTelemetryRef?: RefObject<ChaseTelemetry | null>;
   sirenActive?: boolean;
@@ -66,9 +66,9 @@ function usePoliceDistance(
 
 export function WorldViewportOverlay({
   onResetView,
-  driveMode = false,
-  onEnterDriveMode,
-  onExitDriveMode,
+  sandboxDrive = false,
+  onEnterSandboxDrive,
+  onExitSandboxDrive,
   telemetryRef,
   chaseTelemetryRef,
   sirenActive = false,
@@ -106,13 +106,13 @@ export function WorldViewportOverlay({
               event.stopPropagation();
               onToggleSiren?.();
             }}
-            disabled={driveMode}
+            disabled={sandboxDrive}
             aria-label={
               sirenActive
                 ? "Police siren is active"
                 : "Start the police siren"
             }
-            title={driveMode ? "Siren runs automatically during pursuit" : undefined}
+            title={sandboxDrive ? "Siren runs automatically during pursuit" : undefined}
             className={`pointer-events-auto rounded-md border px-3 py-1.5 text-[11px] font-medium uppercase tracking-[0.15em] transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent ${
               sirenActive
                 ? "border-red-700 bg-red-950/60 text-red-300"
@@ -132,7 +132,7 @@ export function WorldViewportOverlay({
           >
             {muted ? "Sound" : "Mute"}
           </button>
-          {driveMode ? (
+          {sandboxDrive ? (
             <>
               <span className="rounded-md border border-accent/40 bg-accent/10 px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-[0.2em] text-accent">
                 Drive Mode
@@ -141,7 +141,7 @@ export function WorldViewportOverlay({
                 type="button"
                 onClick={(event) => {
                   event.stopPropagation();
-                  onExitDriveMode?.();
+                  onExitSandboxDrive?.();
                 }}
                 aria-label="Return to inspection mode"
                 className="pointer-events-auto rounded-md border border-edge bg-panel-raised/90 px-3 py-1.5 text-[11px] font-medium uppercase tracking-[0.15em] text-zinc-300 transition-colors hover:border-zinc-600 hover:text-zinc-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
@@ -154,7 +154,7 @@ export function WorldViewportOverlay({
               type="button"
               onClick={(event) => {
                 event.stopPropagation();
-                onEnterDriveMode?.();
+                onEnterSandboxDrive?.();
               }}
               disabled={generationActive}
               aria-label="Activate driving mode and vehicle controls"
@@ -178,7 +178,7 @@ export function WorldViewportOverlay({
       </div>
       <div className="flex items-center justify-between">
         <p className="text-[10px] uppercase tracking-[0.2em] text-zinc-600">
-          {driveMode ? (
+          {sandboxDrive ? (
             <span className="text-zinc-500">
               WASD Drive &bull; Space Handbrake &bull; R Reset &bull; Esc Inspect
             </span>
@@ -186,7 +186,7 @@ export function WorldViewportOverlay({
             <>Orbit &bull; Pan &bull; Zoom</>
           )}
         </p>
-        {driveMode && (
+        {sandboxDrive && (
           <div className="flex items-baseline gap-3">
             <div className="flex items-baseline gap-2">
               <span className="text-[10px] uppercase tracking-[0.2em] text-zinc-500">
