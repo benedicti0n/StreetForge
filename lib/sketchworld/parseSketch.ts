@@ -19,6 +19,9 @@ export interface ParsedSketch {
   grid: number;
   /** Road-corridor mask (1 = drivable road), when a corridor was found. */
   corridor: Uint8Array | null;
+  /** The authoritative road-area mask (corridor or fallback blob). */
+  roadMask: Uint8Array;
+  corridorValid: boolean;
   /** Corridor outer contour in grid coordinates (the road's outer edge). */
   outerContour: Array<[number, number]>;
   /** Corridor inner contour in grid coordinates (the road's inner edge). */
@@ -456,7 +459,7 @@ function strokePathFallback(
   labels: Int32Array,
   counts: number[],
   grid: number,
-): { path: Array<[number, number]>; widthCells: number } {
+): { path: Array<[number, number]>; widthCells: number; roadMask: Uint8Array } {
   let roadLabel = -1;
   let roadArea = 0;
   for (let label = 0; label < counts.length; label++) {
@@ -466,7 +469,7 @@ function strokePathFallback(
     }
   }
   if (roadLabel === -1) {
-    return { path: [], widthCells: 0 };
+    return { path: [], widthCells: 0, roadMask: new Uint8Array(grid * grid) };
   }
   const blobMask = new Uint8Array(grid * grid);
   for (let i = 0; i < labels.length; i++) {
@@ -476,9 +479,13 @@ function strokePathFallback(
   }
   const path = walkMedial(blobMask, grid);
   if (path.length < 2) {
-    return { path: [], widthCells: 0 };
+    return { path: [], widthCells: 0, roadMask: new Uint8Array(grid * grid) };
   }
-  return { path, widthCells: Math.max(2, roadArea / path.length) };
+  return {
+    path,
+    widthCells: Math.max(2, roadArea / path.length),
+    roadMask: blobMask,
+  };
 }
 
 export async function parseSketch(dataUrl: string): Promise<ParsedSketch> {
@@ -530,6 +537,8 @@ export async function parseSketch(dataUrl: string): Promise<ParsedSketch> {
   let innerContour: Array<[number, number]> = [];
   let centerline: Array<[number, number]> = [];
   const fallback = strokePathFallback(closed, labels, counts, grid);
+  let roadMask = fallback.roadMask;
+  let corridorValid = false;
 
   if (outerLabel !== -1 && innerLabel !== -1) {
     const { region, outsideRegion } = labelRegions(closed, grid);
@@ -599,7 +608,10 @@ export async function parseSketch(dataUrl: string): Promise<ParsedSketch> {
     }
   }
 
-  const corridorValid = corridor !== null && centerline.length >= 2;
+  corridorValid = corridor !== null && centerline.length >= 2;
+  if (corridorValid && corridor) {
+    roadMask = corridor;
+  }
 
   if (process.env.NODE_ENV === "development") {
     if (corridorValid) {
@@ -628,6 +640,8 @@ export async function parseSketch(dataUrl: string): Promise<ParsedSketch> {
   return {
     grid,
     corridor,
+    roadMask,
+    corridorValid,
     outerContour,
     innerContour,
     centerline: corridorValid ? centerline : fallback.path,

@@ -8,13 +8,7 @@
  */
 
 import type { ParsedSketch } from "./parseSketch";
-
-export interface RoadCorridor {
-  /** Corridor outer edge (world XZ). */
-  outer: Array<[number, number]>;
-  /** Corridor inner edge (world XZ), the road's hole. */
-  inner: Array<[number, number]>;
-}
+import type { WorldTextureSource } from "./buildWorldTexture";
 
 export interface ProceduralWorldDescriptor {
   kind: "procedural";
@@ -23,14 +17,15 @@ export interface ProceduralWorldDescriptor {
   /** World footprint in metres (square). */
   worldSize: number;
   /**
-   * Road centerline in world XZ (used for markings and spawns). When the
-   * corridor form is present the asphalt covers the whole corridor area.
+   * Road centerline in world XZ (markings + spawns). The visual road is a
+   * texture painted from the parsed road mask.
    */
   road: {
     points: Array<[number, number]>;
     width: number;
-    corridor: RoadCorridor | null;
   };
+  /** Source data for the single visual terrain texture. */
+  roadTexture: WorldTextureSource | null;
   ramps: Array<{
     position: [number, number, number];
     width: number;
@@ -55,6 +50,9 @@ export const PROCEDURAL_WORLD_SIZE = 160;
 const ROAD_RAISE = 0.07;
 const SPAWN_PLAYER_ALONG = 0.35;
 const SPAWN_POLICE_BEHIND_M = 12;
+/** Road coverage bounds for a valid Forge map (fraction of the map). */
+const MIN_ROAD_COVERAGE = 0.03;
+const MAX_ROAD_COVERAGE = 0.7;
 
 /** Chaikin smoothing of a polyline (two passes). */
 function smoothPath(
@@ -186,48 +184,41 @@ export async function buildProceduralWorld(
   const worldSize = PROCEDURAL_WORLD_SIZE;
   const { grid } = parsed;
 
-  let corridor: RoadCorridor | null = null;
-  let roadPoints: Array<[number, number]> = [];
-  let roadWidth = 8;
-
-  if (parsed.outerContour.length >= 4 && parsed.innerContour.length >= 4) {
-    // Corridor road: the asphalt is the area between the two boundaries.
-    const outerRaw = parsed.outerContour.map(([x, y]) =>
-      gridToWorld(x, y, grid, worldSize),
-    );
-    const innerRaw = parsed.innerContour.map(([x, y]) =>
-      gridToWorld(x, y, grid, worldSize),
-    );
-    corridor = {
-      outer: smoothPath(outerRaw, 2),
-      inner: smoothPath(innerRaw, 2),
-    };
-    const centerRaw = parsed.centerline.map(([x, y]) =>
-      gridToWorld(x, y, grid, worldSize),
-    );
-    roadPoints = resamplePath(smoothPath(centerRaw, 2), 1.1);
-    if (roadPoints.length < 4) {
-      roadPoints = defaultRoadPath(worldSize);
-      corridor = null;
-    }
-  } else {
-    // Stroke-path fallback.
-    let rawPath = parsed.strokePath.map(([x, y]) =>
-      gridToWorld(x, y, grid, worldSize),
-    );
-    if (rawPath.length < 4) {
-      rawPath = defaultRoadPath(worldSize);
-    }
-    roadPoints = resamplePath(smoothPath(rawPath, 3), 1.1);
-    const widthCells = Math.max(2.5, parsed.strokeWidthCells || 6);
-    roadWidth = Math.min(18, Math.max(6, (widthCells / grid) * worldSize));
+  // Road centerline (corridor or stroke fallback) in world coordinates.
+  let centerRaw = parsed.centerline.map(([x, y]) =>
+    gridToWorld(x, y, grid, worldSize),
+  );
+  if (centerRaw.length < 4) {
+    centerRaw = defaultRoadPath(worldSize);
   }
+  const roadPoints = resamplePath(smoothPath(centerRaw, 2), 1.1);
 
-  // Props are intentionally disabled for the corridor road style: residual
-  // black components are road boundaries, not buildings.
-  const ramps: ProceduralWorldDescriptor["ramps"] = [];
-  const buildings: ProceduralWorldDescriptor["buildings"] = [];
-  const trees: ProceduralWorldDescriptor["trees"] = [];
+  // Fail-closed validation: the road area must exist and the spawns must be
+  // on the road. Otherwise the world is not declared ready.
+  let roadPixels = 0;
+  for (let i = 0; i < parsed.roadMask.length; i++) {
+    if (parsed.roadMask[i] === 1) {
+      roadPixels++;
+    }
+  }
+  const roadCoverage = roadPixels / (grid * grid);
+  const pointInRoad = (x: number, z: number): boolean => {
+    const gx = Math.min(
+      grid - 1,
+      Math.max(0, Math.round(((x / worldSize) + 0.5) * (grid - 1))),
+    );
+    const gy = Math.min(
+      grid - 1,
+      Math.max(0, Math.round(((z / worldSize) + 0.5) * (grid - 1))),
+    );
+    return parsed.roadMask[gy * grid + gx] === 1;
+  };
+
+  if (roadCoverage < MIN_ROAD_COVERAGE || roadCoverage > MAX_ROAD_COVERAGE) {
+    throw new Error(
+      "Couldn't build a clean road from this sketch. Try closing both road boundaries.",
+    );
+  }
 
   // Spawns sit on the road centerline: player ahead, police ~12 m behind.
   const totalLength = Math.max(1, roadPoints.length * 1.1);
@@ -239,13 +230,33 @@ export async function buildProceduralWorld(
       SPAWN_PLAYER_ALONG - SPAWN_POLICE_BEHIND_M / totalLength,
     ),
   );
+  if (!pointInRoad(player.position[0], player.position[2]) ||
+      !pointInRoad(police.position[0], police.position[2])) {
+    throw new Error(
+      "Couldn't build a clean road from this sketch. Try closing both road boundaries.",
+    );
+  }
+
+  const roadTexture: WorldTextureSource = {
+    roadMask: parsed.roadMask,
+    grid,
+    centerline: parsed.centerline,
+    corridorValid: parsed.corridorValid,
+  };
+
+  // Props are intentionally disabled for the road-first release: residual
+  // black components are road boundaries, not buildings.
+  const ramps: ProceduralWorldDescriptor["ramps"] = [];
+  const buildings: ProceduralWorldDescriptor["buildings"] = [];
+  const trees: ProceduralWorldDescriptor["trees"] = [];
 
   return {
     kind: "procedural",
     worldId: `local-${Date.now().toString(36)}`,
     caption: "A forged world built from your sketch.",
     worldSize,
-    road: { points: roadPoints, width: roadWidth, corridor },
+    road: { points: roadPoints, width: 8 },
+    roadTexture,
     ramps,
     buildings,
     trees,
