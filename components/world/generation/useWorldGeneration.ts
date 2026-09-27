@@ -41,10 +41,17 @@ async function submitGeneration(
   imageDataUrl: string,
   mode: GenerationMode,
 ): Promise<{ operationId: string }> {
+  const testMode = (
+    globalThis as unknown as { __SF_TEST_MODE?: string }
+  ).__SF_TEST_MODE;
   const response = await fetch("/api/world/generate", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ image: imageDataUrl, mode }),
+    body: JSON.stringify({
+      image: imageDataUrl,
+      mode: testMode ?? mode,
+    }),
+    cache: "no-store",
   });
   const body = (await response.json()) as {
     operationId?: string;

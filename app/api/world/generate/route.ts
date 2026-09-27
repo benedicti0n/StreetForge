@@ -8,6 +8,7 @@ import type { GenerationMode } from "@/lib/worldlabs/config";
 import {
   createMockOperationId,
   MOCK_ENABLED,
+  mockStartFailure,
 } from "@/lib/worldlabs/mock";
 
 export const runtime = "nodejs";
@@ -29,7 +30,8 @@ export async function POST(request: Request) {
   }
 
   const image = body.image;
-  const mode: GenerationMode = body.mode === "final" ? "final" : "draft";
+  const rawMode = body.mode ?? "draft";
+  const mode: GenerationMode = rawMode === "final" ? "final" : "draft";
   if (!image || typeof image !== "string" || !image.startsWith("data:image/")) {
     return NextResponse.json(
       {
@@ -44,7 +46,18 @@ export async function POST(request: Request) {
 
   try {
     if (MOCK_ENABLED) {
-      return NextResponse.json({ operationId: createMockOperationId() });
+      const failure = mockStartFailure(rawMode);
+      if (failure) {
+        return NextResponse.json(
+          { error: { code: "mock", message: failure.message } },
+          { status: failure.status },
+        );
+      }
+      const suffix =
+        rawMode === "draft" || rawMode === "final"
+          ? createMockOperationId()
+          : `mock-op-${rawMode}-${Date.now()}`;
+      return NextResponse.json({ operationId: suffix });
     }
     const result = await startWorldGeneration(image, mode, WORLD_SKETCH_PROMPT);
     return NextResponse.json(result);

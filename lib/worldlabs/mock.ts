@@ -22,6 +22,12 @@ const MOCK_WORLD: GeneratedWorldDescriptor = {
 
 const MOCK_PROGRESS = [22, 47, 73, 100];
 
+function worldWithout(
+  overrides: Partial<GeneratedWorldDescriptor>,
+): GeneratedWorldDescriptor {
+  return { ...MOCK_WORLD, ...overrides };
+}
+
 export function isMockOperationId(operationId: string): boolean {
   return operationId.startsWith("mock-op-");
 }
@@ -32,6 +38,43 @@ export function createMockOperationId(): string {
 }
 
 export function mockOperationStatus(operationId: string): WorldOperationStatus {
+  if (operationId.includes("-fail")) {
+    return {
+      status: "failed",
+      error: "Mock generation failure for tests.",
+    };
+  }
+  if (operationId.includes("-nosplat")) {
+    return { status: "completed", progress: 100, world: worldWithout({ splats: {} }) };
+  }
+  if (operationId.includes("-brokensplat")) {
+    return {
+      status: "completed",
+      progress: 100,
+      world: worldWithout({ splats: { medium: "/test-fixtures/missing.spz" } }),
+    };
+  }
+  if (operationId.includes("-nocollider")) {
+    return {
+      status: "completed",
+      progress: 100,
+      world: worldWithout({ colliderUrl: undefined }),
+    };
+  }
+  if (operationId.includes("-brokencollider")) {
+    return {
+      status: "completed",
+      progress: 100,
+      world: worldWithout({ colliderUrl: "/test-fixtures/missing.glb" }),
+    };
+  }
+  if (operationId.includes("-nospawn")) {
+    return {
+      status: "completed",
+      progress: 100,
+      world: worldWithout({ colliderUrl: "/test-fixtures/wall.glb" }),
+    };
+  }
   const poll = (mockPolls.get(operationId) ?? 0) + 1;
   mockPolls.set(operationId, poll);
   const progress = MOCK_PROGRESS[Math.min(poll - 1, MOCK_PROGRESS.length - 1)];
@@ -39,4 +82,27 @@ export function mockOperationStatus(operationId: string): WorldOperationStatus {
     return { status: "processing", progress };
   }
   return { status: "completed", progress: 100, world: MOCK_WORLD };
+}
+
+const FAILURE_MODES: Record<string, { status: number; message: string }> = {
+  "fail-auth": { status: 401, message: "Invalid World Labs API key." },
+  "fail-credits": {
+    status: 402,
+    message: "Insufficient API credits for world generation.",
+  },
+  "fail-rate": {
+    status: 429,
+    message: "World Labs rate limit reached. Try again shortly.",
+  },
+  "fail-rejected": {
+    status: 400,
+    message: "World generation request rejected.",
+  },
+};
+
+export function mockStartFailure(mode: string): {
+  status: number;
+  message: string;
+} | null {
+  return FAILURE_MODES[mode] ?? null;
 }
