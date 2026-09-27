@@ -19,7 +19,9 @@ import {
   type VehicleTelemetry,
 } from "./vehicles/vehicleTypes";
 import type { RapierRigidBody } from "@react-three/rapier";
-import { useThree } from "@react-three/fiber";
+import { useFrame, useThree } from "@react-three/fiber";
+import { PMREMGenerator, Scene } from "three";
+import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
 import { PhysicsWorld } from "./physics/PhysicsWorld";
 import { WorldCameraControls } from "./WorldCameraControls";
 import { VehicleFollowCamera } from "./camera/VehicleFollowCamera";
