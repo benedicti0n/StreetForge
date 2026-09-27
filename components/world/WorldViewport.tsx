@@ -206,6 +206,7 @@ export function WorldViewport() {
             driveMode={driveMode}
             onEnterDriveMode={handleEnterDriveMode}
             onExitDriveMode={handleExitDriveMode}
+            telemetryRef={playerTelemetryRef}
             loadingVehicles={pendingVehicles > 0}
             vehicleLoadFailed={vehicleLoadFailed}
           />

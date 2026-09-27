@@ -1,12 +1,33 @@
 "use client";
 
+import { useEffect, useState, type RefObject } from "react";
+import type { VehicleTelemetry } from "./vehicles/vehicleTypes";
+
 interface WorldViewportOverlayProps {
   onResetView: () => void;
   driveMode?: boolean;
   onEnterDriveMode?: () => void;
   onExitDriveMode?: () => void;
+  telemetryRef?: RefObject<VehicleTelemetry | null>;
   loadingVehicles?: boolean;
   vehicleLoadFailed?: boolean;
+}
+
+function useSpeedKmh(telemetryRef?: RefObject<VehicleTelemetry | null>): number {
+  const [speedKmh, setSpeedKmh] = useState(0);
+  useEffect(() => {
+    if (!telemetryRef) {
+      return;
+    }
+    let raf = 0;
+    const loop = () => {
+      setSpeedKmh(Math.round(telemetryRef.current?.speedKmh ?? 0));
+      raf = requestAnimationFrame(loop);
+    };
+    raf = requestAnimationFrame(loop);
+    return () => cancelAnimationFrame(raf);
+  }, [telemetryRef]);
+  return speedKmh;
 }
 
 export function WorldViewportOverlay({
@@ -14,9 +35,11 @@ export function WorldViewportOverlay({
   driveMode = false,
   onEnterDriveMode,
   onExitDriveMode,
+  telemetryRef,
   loadingVehicles = false,
   vehicleLoadFailed = false,
 }: WorldViewportOverlayProps) {
+  const speedKmh = useSpeedKmh(telemetryRef);
   return (
     <div className="pointer-events-none absolute inset-0 z-10 flex flex-col justify-between p-3">
       <div className="flex items-start justify-between gap-3">
@@ -82,6 +105,19 @@ export function WorldViewportOverlay({
             <>Orbit &bull; Pan &bull; Zoom</>
           )}
         </p>
+        {driveMode && (
+          <div className="flex items-baseline gap-2">
+            <span className="text-[10px] uppercase tracking-[0.2em] text-zinc-500">
+              Speed
+            </span>
+            <span className="font-mono text-lg font-semibold tabular-nums text-zinc-100">
+              {speedKmh}
+            </span>
+            <span className="text-[10px] uppercase tracking-[0.2em] text-zinc-500">
+              km/h
+            </span>
+          </div>
+        )}
         {vehicleLoadFailed ? (
           <p className="text-[10px] uppercase tracking-[0.2em] text-red-400/90">
             Vehicle models failed to load
