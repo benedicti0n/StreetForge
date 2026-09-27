@@ -1,0 +1,287 @@
+"use client";
+
+const COLLISION_MIN_INTERVAL_MS = 140;
+const SKID_THRESHOLD_SPEED_KMH = 12;
+
+class VehicleAudioEngine {
+  private context: AudioContext | null = null;
+  private master: GainNode | null = null;
+
+  private engineOscA: OscillatorNode | null = null;
+  private engineOscB: OscillatorNode | null = null;
+  private engineFilter: BiquadFilterNode | null = null;
+  private engineGain: GainNode | null = null;
+
+  private skidSource: AudioBufferSourceNode | null = null;
+  private skidFilter: BiquadFilterNode | null = null;
+  private skidGain: GainNode | null = null;
+
+  private sirenOscA: OscillatorNode | null = null;
+  private sirenOscB: OscillatorNode | null = null;
+  private sirenLfo: OscillatorNode | null = null;
+  private sirenGain: GainNode | null = null;
+  private sirenLfoGain: GainNode | null = null;
+
+  private noiseBuffer: AudioBuffer | null = null;
+  private muted = false;
+  private sirenActive = false;
+  private lastCollisionAt = 0;
+
+  get isUnlocked(): boolean {
+    return this.context !== null;
+  }
+
+  /** Must be called from a user gesture (click/touch). */
+  unlock(): void {
+    if (this.context) {
+      if (this.context.state === "suspended") {
+        void this.context.resume();
+      }
+      return;
+    }
+    const Ctor =
+      window.AudioContext ??
+      (window as unknown as { webkitAudioContext?: typeof AudioContext })
+        .webkitAudioContext;
+    if (!Ctor) {
+      return;
+    }
+    const context = new Ctor();
+    this.context = context;
+    const master = context.createGain();
+    master.gain.value = this.muted ? 0 : 0.85;
+    master.connect(context.destination);
+    this.master = master;
+    this.buildEngine();
+    this.buildSkid();
+    this.buildSiren();
+  }
+
+  setMuted(muted: boolean): void {
+    this.muted = muted;
+    if (this.master && this.context) {
+      this.master.gain.setTargetAtTime(
+        muted ? 0 : 0.85,
+        this.context.currentTime,
+        0.03,
+      );
+    }
+  }
+
+  get isMuted(): boolean {
+    return this.muted;
+  }
+
+  setSirenActive(active: boolean): void {
+    this.sirenActive = active;
+    if (!this.context || !this.sirenGain) {
+      return;
+    }
+    this.sirenGain.gain.setTargetAtTime(
+      active ? 0.09 : 0,
+      this.context.currentTime,
+      active ? 0.15 : 0.3,
+    );
+  }
+
+  get isSirenActive(): boolean {
+    return this.sirenActive;
+  }
+
+  /** speedKmh and throttle (-1..1) drive the race engine voice. */
+  updateEngine(speedKmh: number, throttle: number): void {
+    if (
+      !this.context ||
+      !this.engineOscA ||
+      !this.engineOscB ||
+      !this.engineFilter ||
+      !this.engineGain
+    ) {
+      return;
+    }
+    const time = this.context.currentTime;
+    const speedFactor = Math.min(Math.abs(speedKmh) / 165, 1);
+    const throttleFactor = Math.max(0, throttle);
+    const rpm = Math.min(
+      1.15,
+      0.3 + 0.55 * speedFactor + 0.3 * throttleFactor,
+    );
+    const freqA = 45 + rpm * 105;
+    this.engineOscA.frequency.setTargetAtTime(freqA, time, 0.06);
+    this.engineOscB.frequency.setTargetAtTime(freqA / 2, time, 0.06);
+    this.engineFilter.frequency?.setTargetAtTime(
+      350 + rpm * 1400,
+      time,
+      0.08,
+    );
+    const targetGain = 0.028 + 0.05 * throttleFactor + 0.022 * speedFactor;
+    this.engineGain.gain.setTargetAtTime(targetGain, time, 0.09);
+  }
+
+  /** amount 0..1 drives the tire-skid noise. */
+  setSkid(amount: number): void {
+    if (!this.context || !this.skidGain) {
+      return;
+    }
+    const time = this.context.currentTime;
+    this.skidGain.gain.setTargetAtTime(
+      Math.min(Math.max(amount, 0), 1) * 0.16,
+      time,
+      0.06,
+    );
+  }
+
+  /** Impact-speed based collision thud, rate limited. */
+  playCollision(impactSpeed: number): void {
+    if (!this.context || !this.master) {
+      return;
+    }
+    const now = performance.now();
+    if (now - this.lastCollisionAt < COLLISION_MIN_INTERVAL_MS) {
+      return;
+    }
+    this.lastCollisionAt = now;
+    const intensity = Math.min(Math.max((impactSpeed - 1.5) / 12, 0), 1);
+    if (intensity <= 0.02) {
+      return;
+    }
+    const context = this.context;
+    const time = context.currentTime;
+    const thump = context.createOscillator();
+    thump.type = "sine";
+    thump.frequency.setValueAtTime(130, time);
+    thump.frequency.exponentialRampToValueAtTime(45, time + 0.18);
+    const thumpGain = context.createGain();
+    thumpGain.gain.setValueAtTime(0.35 * intensity, time);
+    thumpGain.gain.exponentialRampToValueAtTime(0.001, time + 0.22);
+    thump.connect(thumpGain).connect(this.master);
+    thump.start(time);
+    thump.stop(time + 0.25);
+  }
+
+  dispose(): void {
+    if (this.context) {
+      void this.context.close();
+      this.context = null;
+      this.master = null;
+      this.engineOscA = this.engineOscB = this.engineFilter = this.engineGain =
+        null;
+      this.skidSource = this.skidFilter = this.skidGain = null;
+      this.sirenOscA = this.sirenOscB = this.sirenLfo = this.sirenGain =
+        this.sirenLfoGain = null;
+      this.noiseBuffer = null;
+    }
+  }
+
+  private buildEngine(): void {
+    const context = this.context;
+    if (!context) {
+      return;
+    }
+    const gain = context.createGain();
+    gain.gain.value = 0;
+    const filter = context.createBiquadFilter();
+    filter.type = "lowpass";
+    filter.frequency.value = 500;
+    filter.Q.value = 1.2;
+    const oscA = context.createOscillator();
+    oscA.type = "sawtooth";
+    oscA.frequency.value = 60;
+    const oscB = context.createOscillator();
+    oscB.type = "square";
+    oscB.frequency.value = 30;
+    const subGain = context.createGain();
+    subGain.gain.value = 0.5;
+    oscA.connect(filter);
+    oscB.connect(subGain).connect(filter);
+    filter.connect(gain).connect(this.master ?? context.destination);
+    oscA.start();
+    oscB.start();
+    this.engineOscA = oscA;
+    this.engineOscB = oscB;
+    this.engineFilter = filter;
+    this.engineGain = gain;
+  }
+
+  private buildSkid(): void {
+    const context = this.context;
+    if (!context) {
+      return;
+    }
+    const bufferSize = context.sampleRate * 1.2;
+    const buffer = context.createBuffer(
+      1,
+      Math.floor(bufferSize),
+      context.sampleRate,
+    );
+    const data = buffer.getChannelData(0);
+    for (let i = 0; i < data.length; i++) {
+      data[i] = Math.random() * 2 - 1;
+    }
+    this.noiseBuffer = buffer;
+    const source = context.createBufferSource();
+    source.buffer = buffer;
+    source.loop = true;
+    const filter = context.createBiquadFilter();
+    filter.type = "bandpass";
+    filter.frequency.value = 720;
+    filter.Q.value = 1.6;
+    const gain = context.createGain();
+    gain.gain.value = 0;
+    source.connect(filter).connect(gain).connect(this.master ?? context.destination);
+    source.start();
+    this.skidSource = source;
+    this.skidFilter = filter;
+    this.skidGain = gain;
+  }
+
+  private buildSiren(): void {
+    const context = this.context;
+    if (!context) {
+      return;
+    }
+    const gain = context.createGain();
+    gain.gain.value = 0;
+    const oscA = context.createOscillator();
+    oscA.type = "sawtooth";
+    oscA.frequency.value = 720;
+    const oscB = context.createOscillator();
+    oscB.type = "sawtooth";
+    oscB.frequency.value = 1440;
+    const oscBGain = context.createGain();
+    oscBGain.gain.value = 0.4;
+    const lfo = context.createOscillator();
+    lfo.frequency.value = 0.9;
+    const lfoGain = context.createGain();
+    lfoGain.gain.value = 110;
+    lfo.connect(lfoGain).connect(oscA.frequency);
+    lfo.connect(lfoGain).connect(oscB.frequency);
+    oscA.connect(gain);
+    oscB.connect(oscBGain).connect(gain);
+    gain.connect(this.master ?? context.destination);
+    oscA.start();
+    oscB.start();
+    lfo.start();
+    this.sirenOscA = oscA;
+    this.sirenOscB = oscB;
+    this.sirenLfo = lfo;
+    this.sirenGain = gain;
+    this.sirenLfoGain = lfoGain;
+  }
+}
+
+export const vehicleAudio = new VehicleAudioEngine();
+
+export function computeSkidAmount(
+  speedKmh: number,
+  handbrake: number,
+  lateralSlip: number,
+): number {
+  const speedFactor = Math.min(Math.max(speedKmh / 80, 0), 1);
+  if (speedKmh < SKID_THRESHOLD_SPEED_KMH) {
+    return 0;
+  }
+  const handbrakeSkid = handbrake * speedFactor * 0.85;
+  const slipSkid = Math.min(Math.max((lateralSlip - 4) / 10, 0), 1) * 0.5;
+  return Math.min(Math.max(handbrakeSkid + slipSkid, 0), 1);
+}

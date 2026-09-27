@@ -14,6 +14,8 @@ import {
 import { WorldScene } from "./WorldScene";
 import { WorldViewportOverlay } from "./WorldViewportOverlay";
 import { useVehicleKeyboard } from "./controls/useVehicleKeyboard";
+import { useVehicleAudio } from "./audio/useVehicleAudio";
+import { vehicleAudio } from "./audio/VehicleAudio";
 import {
   SCENE_VEHICLES,
   VEHICLE_DEFINITIONS,
@@ -81,6 +83,8 @@ export function WorldViewport() {
   );
   const [vehicleLoadFailed, setVehicleLoadFailed] = useState(false);
   const [driveMode, setDriveMode] = useState(false);
+  const [sirenActive, setSirenActive] = useState(false);
+  const [muted, setMuted] = useState(false);
   const vehicleControlsRef = useMemo(
     () =>
       Object.fromEntries(
@@ -94,12 +98,31 @@ export function WorldViewport() {
   const playerTelemetryRef = useRef<VehicleTelemetry | null>(null);
 
   const handleEnterDriveMode = useCallback(() => {
+    vehicleAudio.unlock();
     setDriveMode(true);
   }, []);
 
   const handleExitDriveMode = useCallback(() => {
     setDriveMode(false);
   }, []);
+
+  const handleToggleSiren = useCallback(() => {
+    vehicleAudio.unlock();
+    setSirenActive((active) => {
+      vehicleAudio.setSirenActive(!active);
+      return !active;
+    });
+  }, []);
+
+  const handleToggleMute = useCallback(() => {
+    vehicleAudio.unlock();
+    setMuted((m) => {
+      vehicleAudio.setMuted(!m);
+      return !m;
+    });
+  }, []);
+
+  useVehicleAudio({ playerTelemetryRef });
 
   const handleResetPlayerVehicle = useCallback(() => {
     playerVehicleRef.current?.reset();
@@ -207,6 +230,10 @@ export function WorldViewport() {
             onEnterDriveMode={handleEnterDriveMode}
             onExitDriveMode={handleExitDriveMode}
             telemetryRef={playerTelemetryRef}
+            sirenActive={sirenActive}
+            onToggleSiren={handleToggleSiren}
+            muted={muted}
+            onToggleMute={handleToggleMute}
             loadingVehicles={pendingVehicles > 0}
             vehicleLoadFailed={vehicleLoadFailed}
           />
