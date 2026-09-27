@@ -54,7 +54,7 @@ const CANOPY_LIGHT_MATERIAL = new MeshStandardMaterial({
   roughness: 1,
 });
 const WATER_SURFACE_MATERIAL = new MeshStandardMaterial({
-  color: "#3E9BEF",
+  color: "#2E7FD8",
   roughness: 0.35,
   metalness: 0.1,
   toneMapped: false,
@@ -256,7 +256,16 @@ export function ProceduralWorld({
       {worldTexture ? (
         <mesh rotation-x={-Math.PI / 2} receiveShadow>
           <planeGeometry args={[descriptor.worldSize, descriptor.worldSize]} />
-          <meshStandardMaterial map={worldTexture} roughness={1} />
+          {/* The ground's material color darkens the texture's exposure so
+              the strong scene lights (needed for the tone-mapped props)
+              render the palette colors at their designed richness instead
+              of clipping them toward white. */}
+          <meshStandardMaterial
+            map={worldTexture}
+            roughness={1}
+            toneMapped={false}
+            color="#5C5C5C"
+          />
         </mesh>
       ) : (
         <mesh
