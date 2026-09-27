@@ -2,6 +2,11 @@
 
 const COLLISION_MIN_INTERVAL_MS = 140;
 const SKID_THRESHOLD_SPEED_KMH = 12;
+/**
+ * Hard production ceiling for the police siren (its own gain node). Distance
+ * attenuation only ever lowers this further - never above 0.40.
+ */
+const SIREN_MAX_GAIN = 0.4;
 
 class VehicleAudioEngine {
   private context: AudioContext | null = null;
@@ -21,9 +26,10 @@ class VehicleAudioEngine {
   private sirenLfo: OscillatorNode | null = null;
   private sirenGain: GainNode | null = null;
   private sirenLfoGain: GainNode | null = null;
+  private sirenProceduralGain: GainNode | null = null;
+  private sirenDistanceGain: GainNode | null = null;
   private sirenBuffer: AudioBuffer | null = null;
   private sirenSource: AudioBufferSourceNode | null = null;
-  private sirenDistanceGain: GainNode | null = null;
   private sirenLoadState: "idle" | "loading" | "loaded" | "failed" = "idle";
 
   private noiseBuffer: AudioBuffer | null = null;
@@ -80,25 +86,30 @@ class VehicleAudioEngine {
 
   setSirenActive(active: boolean, fadeSeconds = active ? 0.15 : 0.4): void {
     this.sirenActive = active;
-    if (!this.context || !this.sirenGain) {
+    if (!this.context || !this.sirenGain || !this.sirenProceduralGain) {
       return;
     }
     const time = this.context.currentTime;
-    // Production siren mix: ~40% of the original 0.075 gain.
-    const SIREN_MIX_GAIN = 0.03;
     if (active) {
       if (this.sirenLoadState === "loaded" && this.sirenBuffer) {
         this.startSirenSource();
+        this.sirenProceduralGain.gain.setTargetAtTime(0, time, 0.1);
+      } else if (this.sirenLoadState === "failed") {
+        // The MP3 could not be loaded: procedural siren as the fallback only.
+        this.sirenProceduralGain.gain.setTargetAtTime(1, time, 0.1);
       } else {
-        // Procedural fallback while the CC0 clip loads (or if it failed).
+        // Still loading - stay quiet; loadSirenBuffer starts the source when
+        // it finishes (and enables the procedural fallback on failure).
+        this.sirenProceduralGain.gain.setTargetAtTime(0, time, 0.1);
         if (this.sirenLoadState === "idle") {
           this.loadSirenBuffer();
         }
-        this.sirenGain.gain.setTargetAtTime(SIREN_MIX_GAIN, time, fadeSeconds);
       }
+      this.sirenGain.gain.setTargetAtTime(SIREN_MAX_GAIN, time, fadeSeconds);
       return;
     }
     this.sirenGain.gain.setTargetAtTime(0, time, fadeSeconds);
+    this.sirenProceduralGain.gain.setTargetAtTime(0, time, 0.1);
     if (this.sirenSource) {
       const source = this.sirenSource;
       const stopAt = time + fadeSeconds * 2 + 0.05;
@@ -120,25 +131,27 @@ class VehicleAudioEngine {
     if (!gain || !this.context) {
       return;
     }
-    const factor = Math.min(1, Math.max(0.35, 1.2 - distanceMeters / 60));
+    // 0.25..1.0: near police -> full 0.40, far police -> ~0.10.
+    const factor = Math.min(1, Math.max(0.25, 1.2 - distanceMeters / 60));
     gain.gain.setTargetAtTime(factor, this.context.currentTime, 0.2);
   }
 
   private startSirenSource(): void {
-    if (!this.context || !this.sirenBuffer || !this.sirenGain || this.sirenSource) {
+    if (
+      !this.context ||
+      !this.sirenBuffer ||
+      !this.sirenGain ||
+      !this.sirenDistanceGain ||
+      this.sirenSource
+    ) {
       return;
     }
     const source = this.context.createBufferSource();
     source.buffer = this.sirenBuffer;
     source.loop = true;
-    const distanceGain = this.context.createGain();
-    distanceGain.gain.value = 0.8;
-    source.connect(distanceGain).connect(this.sirenGain);
+    source.connect(this.sirenDistanceGain).connect(this.sirenGain);
     source.start();
     this.sirenSource = source;
-    this.sirenDistanceGain = distanceGain;
-    const time = this.context.currentTime;
-    this.sirenGain.gain.setTargetAtTime(0.03, time, 0.15);
   }
 
   private async loadSirenBuffer(): Promise<void> {
@@ -147,7 +160,7 @@ class VehicleAudioEngine {
     }
     this.sirenLoadState = "loading";
     try {
-      const response = await fetch("/audio/police-siren.ogg");
+      const response = await fetch("/audio/police-siren.mp3");
       if (!response.ok) {
         throw new Error(`siren fetch failed: ${response.status}`);
       }
@@ -157,10 +170,23 @@ class VehicleAudioEngine {
       // Start immediately if the siren is already active.
       if (this.sirenActive) {
         this.startSirenSource();
+        this.sirenProceduralGain?.gain.setTargetAtTime(
+          0,
+          this.context.currentTime,
+          0.1,
+        );
       }
     } catch {
       this.sirenLoadState = "failed";
       this.sirenBuffer = null;
+      // If the pursuit is already running, fall back to the procedural siren.
+      if (this.sirenActive && this.sirenProceduralGain && this.context) {
+        this.sirenProceduralGain.gain.setTargetAtTime(
+          1,
+          this.context.currentTime,
+          0.1,
+        );
+      }
     }
   }
 
@@ -243,8 +269,9 @@ class VehicleAudioEngine {
       this.skidSource = this.skidFilter = this.skidGain = null;
       this.sirenOscA = this.sirenOscB = this.sirenLfo = this.sirenGain =
         this.sirenLfoGain = null;
-      this.sirenSource = null;
+      this.sirenProceduralGain = null;
       this.sirenDistanceGain = null;
+      this.sirenSource = null;
       this.sirenBuffer = null;
       this.sirenLoadState = "idle";
       this.noiseBuffer = null;
@@ -330,6 +357,10 @@ class VehicleAudioEngine {
     }
     const gain = context.createGain();
     gain.gain.value = 0;
+    const proceduralGain = context.createGain();
+    proceduralGain.gain.value = 0;
+    const distanceGain = context.createGain();
+    distanceGain.gain.value = 1;
     const oscA = context.createOscillator();
     oscA.type = "sawtooth";
     oscA.frequency.value = 720;
@@ -344,8 +375,13 @@ class VehicleAudioEngine {
     lfoGain.gain.value = 110;
     lfo.connect(lfoGain).connect(oscA.frequency);
     lfo.connect(lfoGain).connect(oscB.frequency);
-    oscA.connect(gain);
-    oscB.connect(oscBGain).connect(gain);
+    oscA.connect(proceduralGain);
+    oscB.connect(oscBGain).connect(proceduralGain);
+    // Procedural oscillators -> proceduralGain -> distanceGain -> sirenGain.
+    // The recorded MP3 feeds distanceGain too, so distance attenuation and
+    // the 0.40 ceiling apply to both paths; only one path is ever audible.
+    proceduralGain.connect(distanceGain);
+    distanceGain.connect(gain);
     gain.connect(this.master ?? context.destination);
     oscA.start();
     oscB.start();
@@ -355,6 +391,8 @@ class VehicleAudioEngine {
     this.sirenLfo = lfo;
     this.sirenGain = gain;
     this.sirenLfoGain = lfoGain;
+    this.sirenProceduralGain = proceduralGain;
+    this.sirenDistanceGain = distanceGain;
   }
 }
 

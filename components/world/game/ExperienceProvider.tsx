@@ -12,6 +12,7 @@ import {
 } from "react";
 import { useWorldPipeline } from "@/components/world/generation/WorldPipeline";
 import type { WorldGenerationState } from "@/components/world/generation/useWorldGeneration";
+import { vehicleAudio } from "@/components/world/audio/VehicleAudio";
 import {
   BUST_CLOSE_DISTANCE_M,
   BUST_COLLISION_MULTIPLIER,
@@ -181,12 +182,17 @@ export function ExperienceProvider({ children }: ExperienceProviderProps) {
     if (state !== "world-ready") {
       return;
     }
+    // Unlock the audio context inside the START CHASE user gesture so the
+    // engine/siren can play without autoplay restrictions.
+    vehicleAudio.unlock();
     resetVehiclesAndProgress();
     setCountdownValue(3);
     setState("countdown");
   }, [state, resetVehiclesAndProgress]);
 
   const runItBack = useCallback(() => {
+    // RUN IT BACK is also a user gesture - resume/unlock audio for the replay.
+    vehicleAudio.unlock();
     resetVehiclesAndProgress();
     setCountdownValue(3);
     setState("countdown");

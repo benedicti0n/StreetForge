@@ -31,5 +31,4 @@ Bundled license file: `police-car/license.txt` (official Sketchfab download lice
 - Creator: TitanKaempfer (https://freesound.org/people/TitanKaempfer/)
 - Original URL: https://freesound.org/s/746302/
 - License: CC0 1.0 (https://creativecommons.org/publicdomain/zero/1.0/)
-- Local path: `public/audio/police-siren.ogg` (manual download required;
-  Freesound requires authentication for automated downloads)
+- Local path: `public/audio/police-siren.mp3` (already placed).
