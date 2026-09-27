@@ -67,6 +67,51 @@ function decodeImageToGrid(
   });
 }
 
+/**
+ * Flood-fills from the grid borders over the non-drawn cells. Any cell that
+ * cannot be reached from the outside is an enclosed interior (a closed
+ * outlined shape), which becomes drawn. This turns outlined roads/shapes
+ * into solid regions instead of thin "linings".
+ */
+function fillEnclosedInteriors(mask: Uint8Array, grid: number): void {
+  const reached = new Uint8Array(grid * grid);
+  const stack: number[] = [];
+  const inBounds = (x: number, y: number) =>
+    x >= 0 && y >= 0 && x < grid && y < grid;
+  const push = (x: number, y: number) => {
+    if (!inBounds(x, y)) {
+      return;
+    }
+    const index = y * grid + x;
+    if (mask[index] === 0 && reached[index] === 0) {
+      reached[index] = 1;
+      stack.push(index);
+    }
+  };
+  for (let x = 0; x < grid; x++) {
+    push(x, 0);
+    push(x, grid - 1);
+  }
+  for (let y = 0; y < grid; y++) {
+    push(0, y);
+    push(grid - 1, y);
+  }
+  while (stack.length > 0) {
+    const index = stack.pop()!;
+    const cx = index % grid;
+    const cy = (index / grid) | 0;
+    push(cx - 1, cy);
+    push(cx + 1, cy);
+    push(cx, cy - 1);
+    push(cx, cy + 1);
+  }
+  for (let i = 0; i < grid * grid; i++) {
+    if (mask[i] === 0 && reached[i] === 0) {
+      mask[i] = 1;
+    }
+  }
+}
+
 function connectedComponents(
   mask: Uint8Array,
   grid: number,
@@ -310,6 +355,10 @@ export async function parseSketch(dataUrl: string): Promise<ParsedSketch> {
       mask[i] = 1;
     }
   }
+
+  // Closed outlines become solid regions so a shape drawn as a thin ring
+  // generates a full-width road instead of just its lining.
+  fillEnclosedInteriors(mask, grid);
 
   const { labels, counts, fillRatios, bounds } = connectedComponents(
     mask,
