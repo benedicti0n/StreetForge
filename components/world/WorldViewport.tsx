@@ -224,7 +224,7 @@ export function WorldViewport() {
               far: 2000,
             }}
             dpr={[1, 2]}
-            gl={{ antialias: true }}
+            gl={{ antialias: false }}
           >
             <WorldScene
               controlsRef={controlsRef}

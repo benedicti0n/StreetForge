@@ -4,6 +4,7 @@ import { Grid, OrbitControls } from "@react-three/drei";
 import {
   Component,
   Suspense,
+  useMemo,
   type ReactNode,
   type RefObject,
 } from "react";
@@ -14,6 +15,7 @@ import {
   type VehicleTelemetry,
 } from "./vehicles/vehicleTypes";
 import type { RapierRigidBody } from "@react-three/rapier";
+import { useThree } from "@react-three/fiber";
 import { PhysicsWorld } from "./physics/PhysicsWorld";
 import { WorldCameraControls } from "./WorldCameraControls";
 import { VehicleFollowCamera } from "./camera/VehicleFollowCamera";
@@ -26,8 +28,15 @@ import {
   WORLD_RESET_BOUNDS,
   WORLD_SIZE,
 } from "./worldConstants";
+import "./spark/SparkElements";
 
 type ControlsRef = React.ElementRef<typeof OrbitControls>;
+
+function SparkWorldRenderer() {
+  const gl = useThree((state) => state.gl);
+  const args = useMemo(() => ({ renderer: gl }), [gl]);
+  return <sparkRenderer args={[args]} />;
+}
 
 class VehicleLoadErrorBoundary extends Component<
   { children: ReactNode; onFail?: () => void },
@@ -83,6 +92,7 @@ export function WorldScene({
   return (
     <>
       <color attach="background" args={["#101013"]} />
+      <SparkWorldRenderer />
       <WorldCameraControls controlsRef={controlsRef} enabled={!driveMode} />
       <VehicleFollowCamera
         bodyRef={playerBodyRef}
