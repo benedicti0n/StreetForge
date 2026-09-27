@@ -59,6 +59,16 @@ export function GeneratedWorld({
     [onSplatReady],
   );
 
+  // Spark's SplatMesh re-creates (and re-fetches its URL) whenever the args
+  // identity changes, so the args must stay referentially stable across
+  // parent re-renders.
+  const splatArgs = useMemo<
+    [{ url: string | undefined; onLoad: (mesh: SparkSplatMesh) => void }]
+  >(
+    () => [{ url: splatUrl ?? undefined, onLoad: handleLoad }],
+    [splatUrl, handleLoad],
+  );
+
   return (
     <>
       <group
@@ -67,7 +77,7 @@ export function GeneratedWorld({
         scale={transform.scale}
       >
         {splatUrl && (
-          <splatMesh args={[{ url: splatUrl, onLoad: handleLoad }]} />
+          <splatMesh args={splatArgs} />
         )}
       </group>
       <WorldCollider

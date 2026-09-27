@@ -34,6 +34,8 @@ interface WorldGenerationApi {
     imageDataUrl: string,
     mode: GenerationMode,
   ): Promise<GeneratedWorldDescriptor | null>;
+  /** Marks an already-generated world as the active result (refetch path). */
+  markWorldReady(world: GeneratedWorldDescriptor): void;
   reset(): void;
 }
 
@@ -175,6 +177,17 @@ export function useWorldGeneration(): WorldGenerationApi {
     [],
   );
 
+  const markWorldReady = useCallback((world: GeneratedWorldDescriptor) => {
+    generationTokenRef.current += 1;
+    abortControllerRef.current?.abort();
+    setResult(world);
+    setState((prev) => ({
+      ...prev,
+      phase: "worldReady",
+      progress: 100,
+    }));
+  }, []);
+
   const reset = useCallback(() => {
     generationTokenRef.current += 1;
     abortControllerRef.current?.abort();
@@ -182,5 +195,5 @@ export function useWorldGeneration(): WorldGenerationApi {
     setState({ phase: "editing", mode: "draft" });
   }, []);
 
-  return { state, result, start, reset };
+  return { state, result, start, markWorldReady, reset };
 }

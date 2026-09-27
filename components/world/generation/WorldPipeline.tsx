@@ -70,7 +70,9 @@ export function WorldPipelineProvider({ children }: { children: ReactNode }) {
           error?: { message?: string };
         };
         if (!cancelled && response.ok && body.world) {
+          generation.markWorldReady(body.world);
           setGeneratedWorld(body.world);
+          setWorldMode("generated");
         }
       } catch {
         // ignore; sandbox remains active
