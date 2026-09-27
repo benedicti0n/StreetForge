@@ -66,6 +66,7 @@ Interpret the rough drawing intelligently:
 * blue waves/scribbles become WATER areas
 * green scribbles become VEGETATION regions
 * triangles or obvious stunt-ramp marks become RAMP footprints
+* orange or reddish-orange rectangles/blocks become RAMP footprints (do not drop them into terrain or road)
 * unclear tiny marks should be ignored instead of invented into objects
 
 The ROAD must be:

@@ -219,7 +219,9 @@ export function ProceduralWorld({
       {worldTexture ? (
         <mesh rotation-x={-Math.PI / 2} receiveShadow>
           <planeGeometry args={[descriptor.worldSize, descriptor.worldSize]} />
-          <meshStandardMaterial map={worldTexture} roughness={1} />
+          {/* toneMapped=false keeps the designed palette colors instead of
+              letting ACES wash them out. */}
+          <meshStandardMaterial map={worldTexture} roughness={1} toneMapped={false} />
         </mesh>
       ) : (
         <mesh

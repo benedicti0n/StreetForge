@@ -5,7 +5,7 @@
 
 const cache = new Map<string, string>();
 
-export const NORMALIZATION_PROMPT_VERSION = 1;
+export const NORMALIZATION_PROMPT_VERSION = 2;
 
 export function hashSketch(dataUrl: string): string {
   let hash = 5381;

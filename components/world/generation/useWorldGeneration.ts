@@ -224,6 +224,16 @@ export function useWorldGeneration(): WorldGenerationApi {
     }));
   }, []);
 
+function countOnes(mask: Uint8Array, grid: number): number {
+  let n = 0;
+  for (let i = 0; i < grid * grid; i++) {
+    if (mask[i] === 1) {
+      n++;
+    }
+  }
+  return n;
+}
+
 function loadImageElement(dataUrl: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const image = new Image();
@@ -307,6 +317,18 @@ function loadImageElement(dataUrl: string): Promise<HTMLImageElement> {
           layout = parseNormalizedMap(quantized.classes, quantized.grid);
         } catch {
           return fail("validate");
+        }
+        {
+          console.info(
+            "[streetforge] semantic parse",
+            JSON.stringify({
+              road: countOnes(layout.roadMask, layout.grid),
+              buildings: layout.buildings.length,
+              water: countOnes(layout.waterMask, layout.grid),
+              vegetation: layout.vegetation.length,
+              ramps: layout.ramps.length,
+            }),
+          );
         }
         const world = await buildProceduralWorldFromNormalized(layout);
         if (generationTokenRef.current !== token) {

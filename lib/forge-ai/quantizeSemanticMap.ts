@@ -20,7 +20,9 @@ export interface QuantizedMap {
   uniqueClasses: SemanticClass[];
 }
 
-const MAX_PALETTE_DISTANCE = 90;
+// Generous tolerance: slightly off palette colors from the image model
+// still map to their intended semantic class instead of being dropped.
+const MAX_PALETTE_DISTANCE = 130;
 
 function decodeToGrid(
   image: HTMLImageElement,
