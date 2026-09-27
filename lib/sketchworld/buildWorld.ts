@@ -28,7 +28,8 @@ export interface ProceduralWorldDescriptor {
     size: [number, number, number];
     yaw: number;
   }>;
-  trees: Array<{ position: [number, number, number]; scale: number }>;
+  water: { points: Array<[number, number]>; width: number } | null;
+  vegetation: Array<{ position: [number, number, number]; scale: number }>;
   spawns: {
     player: { position: [number, number, number]; yaw: number };
     police: { position: [number, number, number]; yaw: number };
@@ -217,20 +218,47 @@ export async function buildProceduralWorld(
     };
   });
 
-  const buildings = parsed.buildings.map(({ x, y }) => {
+  // Buildings: footprints from the drawn gray rectangles, heights derived
+  // deterministically (4-10 m), footprint clamped to 4-25 m.
+  const buildings = parsed.buildings.map(({ x, y, widthCells, heightCells }) => {
     const [wx, wz] = gridToWorld(x, y, grid, worldSize);
+    const footprint = Math.min(
+      25,
+      Math.max(4, (Math.max(widthCells, heightCells) / grid) * worldSize),
+    );
+    const depth = Math.min(
+      25,
+      Math.max(4, (Math.min(widthCells, heightCells) / grid) * worldSize),
+    );
+    const hash = Math.abs(Math.round(wx * 12.9898 + wz * 78.233) % 7);
+    const height = 4 + hash;
     return {
       position: [wx, 0, wz] as [number, number, number],
-      size: [9, 9, 9] as [number, number, number],
+      size: [footprint, height, depth] as [number, number, number],
       yaw: 0,
     };
   });
 
-  const trees = parsed.trees.map(({ x, y }) => {
+  // Water: buffered ribbon along the drawn blue strokes (5-10 m wide).
+  let water: ProceduralWorldDescriptor["water"] = null;
+  if (parsed.waterPath.length >= 2) {
+    const waterRaw = parsed.waterPath.map(([x, y]) =>
+      gridToWorld(x, y, grid, worldSize),
+    );
+    const waterPoints = resamplePath(smoothPath(waterRaw, 1), 1.6);
+    const waterWidth = Math.min(
+      10,
+      Math.max(5, (parsed.waterWidthCells / grid) * worldSize),
+    );
+    water = { points: waterPoints, width: waterWidth };
+  }
+
+  // Vegetation: deterministic cluster points from the green marks.
+  const vegetation = parsed.vegetation.map(({ x, y }, index) => {
     const [wx, wz] = gridToWorld(x, y, grid, worldSize);
     return {
       position: [wx, 0, wz] as [number, number, number],
-      scale: 0.8 + Math.random() * 0.6,
+      scale: 0.75 + ((index * 37) % 10) / 16,
     };
   });
 
@@ -253,7 +281,8 @@ export async function buildProceduralWorld(
     road: { points: roadPoints, width: roadWidth },
     ramps,
     buildings,
-    trees,
+    water,
+    vegetation,
     spawns: { player, police },
     halfExtent: worldSize / 2,
   };
