@@ -357,6 +357,23 @@ export function WorldViewport() {
 
   useVehicleAudio({ playerTelemetryRef });
 
+  // Feed the pursuit distance into the siren so it swells when the police
+  // is close and eases off when they fall behind.
+  useEffect(() => {
+    if (!sirenActive) {
+      return;
+    }
+    let raf = 0;
+    const loop = () => {
+      vehicleAudio.setSirenDistance(
+        chaseTelemetryRef.current?.distanceToPlayer ?? 40,
+      );
+      raf = requestAnimationFrame(loop);
+    };
+    raf = requestAnimationFrame(loop);
+    return () => cancelAnimationFrame(raf);
+  }, [sirenActive]);
+
   const handleColliderReady = useCallback(
     (spawns: SafeSpawnResult, halfExtent: number) => {
       setColliderInfo({

@@ -21,6 +21,10 @@ class VehicleAudioEngine {
   private sirenLfo: OscillatorNode | null = null;
   private sirenGain: GainNode | null = null;
   private sirenLfoGain: GainNode | null = null;
+  private sirenBuffer: AudioBuffer | null = null;
+  private sirenSource: AudioBufferSourceNode | null = null;
+  private sirenDistanceGain: GainNode | null = null;
+  private sirenLoadState: "idle" | "loading" | "loaded" | "failed" = "idle";
 
   private noiseBuffer: AudioBuffer | null = null;
   private muted = false;
@@ -55,6 +59,7 @@ class VehicleAudioEngine {
     this.buildEngine();
     this.buildSkid();
     this.buildSiren();
+    this.loadSirenBuffer();
   }
 
   setMuted(muted: boolean): void {
@@ -77,11 +82,83 @@ class VehicleAudioEngine {
     if (!this.context || !this.sirenGain) {
       return;
     }
-    this.sirenGain.gain.setTargetAtTime(
-      active ? 0.075 : 0,
-      this.context.currentTime,
-      fadeSeconds,
-    );
+    const time = this.context.currentTime;
+    if (active) {
+      if (this.sirenLoadState === "loaded" && this.sirenBuffer) {
+        this.startSirenSource();
+      } else {
+        // Procedural fallback while the CC0 clip loads (or if it failed).
+        if (this.sirenLoadState === "idle") {
+          this.loadSirenBuffer();
+        }
+        this.sirenGain.gain.setTargetAtTime(0.075, time, fadeSeconds);
+      }
+      return;
+    }
+    this.sirenGain.gain.setTargetAtTime(0, time, fadeSeconds);
+    if (this.sirenSource) {
+      const source = this.sirenSource;
+      const stopAt = time + fadeSeconds * 2 + 0.05;
+      this.sirenSource = null;
+      const delayMs = (stopAt - time) * 1000;
+      window.setTimeout(() => {
+        try {
+          source.stop();
+        } catch {
+          // already stopped
+        }
+      }, delayMs);
+    }
+  }
+
+  /** Scales the siren volume with the police distance (near = louder). */
+  setSirenDistance(distanceMeters: number): void {
+    const gain = this.sirenDistanceGain;
+    if (!gain || !this.context) {
+      return;
+    }
+    const factor = Math.min(1, Math.max(0.35, 1.2 - distanceMeters / 60));
+    gain.gain.setTargetAtTime(factor, this.context.currentTime, 0.2);
+  }
+
+  private startSirenSource(): void {
+    if (!this.context || !this.sirenBuffer || !this.sirenGain || this.sirenSource) {
+      return;
+    }
+    const source = this.context.createBufferSource();
+    source.buffer = this.sirenBuffer;
+    source.loop = true;
+    const distanceGain = this.context.createGain();
+    distanceGain.gain.value = 0.8;
+    source.connect(distanceGain).connect(this.sirenGain);
+    source.start();
+    this.sirenSource = source;
+    this.sirenDistanceGain = distanceGain;
+    const time = this.context.currentTime;
+    this.sirenGain.gain.setTargetAtTime(0.075, time, 0.15);
+  }
+
+  private async loadSirenBuffer(): Promise<void> {
+    if (this.sirenLoadState !== "idle" || !this.context) {
+      return;
+    }
+    this.sirenLoadState = "loading";
+    try {
+      const response = await fetch("/audio/police-siren.ogg");
+      if (!response.ok) {
+        throw new Error(`siren fetch failed: ${response.status}`);
+      }
+      const arrayBuffer = await response.arrayBuffer();
+      this.sirenBuffer = await this.context.decodeAudioData(arrayBuffer);
+      this.sirenLoadState = "loaded";
+      // Start immediately if the siren is already active.
+      if (this.sirenActive) {
+        this.startSirenSource();
+      }
+    } catch {
+      this.sirenLoadState = "failed";
+      this.sirenBuffer = null;
+    }
   }
 
   get isSirenActive(): boolean {
@@ -170,6 +247,10 @@ class VehicleAudioEngine {
       this.skidSource = this.skidFilter = this.skidGain = null;
       this.sirenOscA = this.sirenOscB = this.sirenLfo = this.sirenGain =
         this.sirenLfoGain = null;
+      this.sirenSource = null;
+      this.sirenDistanceGain = null;
+      this.sirenBuffer = null;
+      this.sirenLoadState = "idle";
       this.noiseBuffer = null;
     }
   }
