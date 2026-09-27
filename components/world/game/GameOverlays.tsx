@@ -131,7 +131,9 @@ export function GameOverlays({ telemetryRef, chaseTelemetryRef }: GameOverlaysPr
         </>
       )}
 
-      {state === "escaped" && <ResultOverlay reducedMotion={reduced} />}
+      {(state === "escaped" || state === "busted") && (
+        <ResultOverlay reducedMotion={reduced} />
+      )}
     </div>
   );
 }
@@ -256,17 +258,24 @@ function ResultOverlay({ reducedMotion }: { reducedMotion: boolean }) {
   if (!result) {
     return null;
   }
+  const escaped = result.outcome === "escaped";
   return (
     <div
-      className={`pointer-events-auto flex flex-col items-center gap-3 rounded-lg border border-emerald-500/40 bg-panel/90 px-10 py-8 text-center shadow-2xl backdrop-blur-sm ${
-        reducedMotion ? "" : "animate-[sf-rise_0.35s_ease-out]"
-      }`}
+      className={`pointer-events-auto flex flex-col items-center gap-3 rounded-lg border px-10 py-8 text-center shadow-2xl backdrop-blur-sm ${
+        escaped ? "border-emerald-500/40" : "border-red-800/50"
+      } bg-panel/90 ${reducedMotion ? "" : "animate-[sf-rise_0.35s_ease-out]"}`}
     >
-      <p className="text-5xl font-black uppercase tracking-[0.12em] text-emerald-400">
-        Escaped
+      <p
+        className={`text-5xl font-black uppercase tracking-[0.12em] ${
+          escaped ? "text-emerald-400" : "text-red-400"
+        }`}
+      >
+        {escaped ? "Escaped" : "Busted"}
       </p>
       <p className="max-w-[36ch] text-sm leading-relaxed text-zinc-300">
-        You lost the pursuit. The streets are yours.
+        {escaped
+          ? "You lost the pursuit. The streets are yours."
+          : "They boxed you in. The pursuit is over."}
       </p>
       <div className="mt-1 flex items-center gap-6 text-center">
         <ResultStat label="Peak speed" value={`${result.peakSpeedKmh}`} unit="km/h" />
