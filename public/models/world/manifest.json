@@ -1,4 +1,0 @@
-{
-  "enabled": false,
-  "note": "Place the GLB models (see ASSETS.md), then set enabled to true to activate the imported world assets. Until then the built-in procedural visuals are used."
-}

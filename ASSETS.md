@@ -1,47 +1,69 @@
 # World Assets
 
-The generated world renders the built-in procedural geometry by default.
-Placing the files below and flipping the manifest flag upgrades the visuals
-while keeping the generated layout (road route, building footprints, water
-regions, vegetation regions, ramp positions) and all gameplay colliders
-unchanged.
+The generated world renders built-in procedural geometry only as a fallback.
+Each imported model is auto-detected: as soon as its GLB exists at the
+registered path (below), the real model replaces the placeholder on the next
+world build. No flag or manifest is required.
 
-## Activation
+Layout (road route, building footprints, water regions, vegetation regions,
+ramp positions) and all gameplay colliders are never changed by these files.
 
-1. Download each model from the Sketchfab page (Download button -> glTF/GLB).
-2. Place the GLB files at the paths below.
-3. Set `"enabled": true` in `public/models/world/manifest.json` and rebuild.
+## Models to place manually
 
-While the manifest is disabled (default) the app makes no model requests and
-the procedural visuals are used - nothing breaks and no 404s appear.
+The Sketchfab download API requires authentication, so these files cannot be
+fetched by the app. Download each model from the Sketchfab page
+(Download button -> glTF/GLB) and place the GLB at the exact path below
+(`worldAssets.ts` is the registry):
 
-## Files to place manually
-
-The Sketchfab download API requires authentication, so these files could not
-be fetched automatically. Download each model from the Sketchfab page
-(Download button -> glTF/GLB) and place the GLB here:
-
-| Path | Sketchfab model | Notes |
+| Registry key | Sketchfab model | Place at |
 | --- | --- | --- |
-| `public/models/world/roads/road.glb` | [ROAD Template](https://sketchfab.com/3d-models/road-template-4d07393f253c4777ac66c7ec2887e599) | Straight road segment; placed every ~8 m along the generated route. Width is auto-fitted to the road (8 m). Base painted road stays underneath. |
-| `public/models/world/trees/trees.glb` | [Low poly trees](https://sketchfab.com/3d-models/low-poly-trees-51cae4a194344e8bbfbd0a4cff205f76) | One or more tree variants; cloned per vegetation region, auto-scaled to ~5 m height. |
-| `public/models/world/buildings/buildings.glb` | [street buildings](https://sketchfab.com/3d-models/street-buildings-5113b368123e4b94b0aceaf2c32d6b6a) | Cloned per building footprint, fitted to each footprint (max 2.5x distortion). |
-| `public/models/world/water/water.glb` | [Water Animation](https://sketchfab.com/3d-models/water-animation-e54ff76bef854b128af8d20cf9c03729) | Scaled to cover the generated water region; animation included in the model is preserved. |
-| `public/models/world/ramps/ramp.glb` | [Skatepark Ramp Kicker](https://sketchfab.com/3d-models/skatepark-ramp-kicker-7654188f47ee46888ec77a43d87e40ca) | Placed per ramp region, oriented by the existing ramp yaw (facing the nearest road point), fitted to the ramp footprint. |
+| `road` | [ROAD Template](https://sketchfab.com/3d-models/road-template-4d07393f253c4777ac66c7ec2887e599) | `public/models/world/road/road.glb` |
+| `trees` | [Low poly trees](https://sketchfab.com/3d-models/low-poly-trees-51cae4a194344e8bbfbd0a4cff205f76) | `public/models/world/trees/trees.glb` |
+| `buildings` | [street buildings](https://sketchfab.com/3d-models/street-buildings-5113b368123e4b94b0aceaf2c32d6b6a) | `public/models/world/buildings/buildings.glb` |
+| `water` | [Water Animation](https://sketchfab.com/3d-models/water-animation-e54ff76bef854b128af8d20cf9c03729) | `public/models/world/water/water.glb` |
+| `ramp` | [Skatepark Ramp Kicker](https://sketchfab.com/3d-models/skatepark-ramp-kicker-7654188f47ee46888ec77a43d87e40ca) | `public/models/world/ramp/ramp.glb` |
 
-Tuning knobs live in `components/world/procedural/ProceduralWorld.tsx`:
-`ROAD_SEGMENT_SPACING` (piece spacing in meters) and `TREE_TARGET_HEIGHT`.
+## How each model is used
 
-If a model renders wrong-side-up or at a wrong scale, export it from
-Sketchfab with "up" = +Y, and check the fitted scale in the browser console
-(none is logged by default; the bounding-box fit assumes a centered model).
+- **Road** — if the model is a modular straight/curved segment kit it is
+  tiled along the generated centerline every 8 m (`ROAD_SEGMENT_SPACING`),
+  width-fitted to the 8 m road. The painted CanvasTexture road stays
+  underneath as the authoritative drivable surface, so any generated curve
+  keeps working. A single non-modular strip is treated as roadside dressing.
+- **Trees** — cloned per vegetation region (deterministic variant when the
+  GLB has several top-level meshes), height-fitted to ~5 m, deterministic
+  scale/rotation.
+- **Buildings** — cloned per generated footprint, fitted to the footprint
+  (max 2.5x per-axis distortion), existing box colliders kept.
+- **Water** — fitted to the generated water region; the first animation clip
+  plays via `AnimationMixer` when the GLB includes one (ripples etc.).
+  Boundary/hazard walls kept.
+- **Ramp** — cloned per ramp region, oriented by the existing ramp yaw
+  (facing the nearest road point), footprint-fitted, resting on the terrain.
+  The existing trimesh collider is kept (stability over fidelity).
+
+Every model is auto-normalized at runtime (`normalizeModel`): Box3 size,
+center, and minY are measured and each placement lifts the model so its
+lowest point sits on the terrain. Centralized per-asset transforms
+(`WORLD_ASSET_CONFIG` in `lib/worldAssets.ts`): `scale`, `rotationY`,
+`yOffset`, `fit`, `targetHeight`.
 
 ## Audio
 
 | Path | Source | Notes |
 | --- | --- | --- |
-| `public/audio/engine.mp3` | [Lamborghini Urus Racing Sound Effect](https://pixabay.com/sound-effects/city-lamborghini-urus-racing-sound-effect-163336/) (Pixabay, mizanstock) | Already placed. Loopable driver engine sample; volume/playback rate follow speed and throttle. |
+| `public/audio/engine.mp3` | [Lamborghini Urus Racing Sound Effect](https://pixabay.com/sound-effects/city-lamborghini-urus-racing-sound-effect-163336/) (Pixabay, mizanstock) | Already placed. Player engine sample; gain/rate follow speed and throttle. |
 | `public/audio/police-siren.ogg` | (CC0, pre-existing) | The provided "police siren" URL pointed at the ramp model and is not an audio file, so the existing siren is retained and mixed at ~40% loudness. |
+
+## Development diagnostics
+
+In development, one console line per asset is printed when a world builds:
+
+```
+[streetforge] world assets
+road: loaded (N meshes, clips: none, size: ...)
+trees: FAILED /models/world/trees/trees.glb
+```
 
 ## Licenses / Attribution
 
