@@ -84,6 +84,8 @@ class VehicleAudioEngine {
       return;
     }
     const time = this.context.currentTime;
+    // Production siren mix: ~40% of the original 0.075 gain.
+    const SIREN_MIX_GAIN = 0.03;
     if (active) {
       if (this.sirenLoadState === "loaded" && this.sirenBuffer) {
         this.startSirenSource();
@@ -92,7 +94,7 @@ class VehicleAudioEngine {
         if (this.sirenLoadState === "idle") {
           this.loadSirenBuffer();
         }
-        this.sirenGain.gain.setTargetAtTime(0.075, time, fadeSeconds);
+        this.sirenGain.gain.setTargetAtTime(SIREN_MIX_GAIN, time, fadeSeconds);
       }
       return;
     }
@@ -136,7 +138,7 @@ class VehicleAudioEngine {
     this.sirenSource = source;
     this.sirenDistanceGain = distanceGain;
     const time = this.context.currentTime;
-    this.sirenGain.gain.setTargetAtTime(0.075, time, 0.15);
+    this.sirenGain.gain.setTargetAtTime(0.03, time, 0.15);
   }
 
   private async loadSirenBuffer(): Promise<void> {
