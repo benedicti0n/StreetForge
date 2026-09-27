@@ -5,6 +5,46 @@ import { useExperience } from "./ExperienceProvider";
 import type { VehicleTelemetry } from "@/components/world/vehicles/vehicleTypes";
 import type { ChaseTelemetry } from "@/components/world/police/PoliceChaseController";
 
+function useSpeedKmh(telemetryRef?: RefObject<VehicleTelemetry | null>): number {
+  const [speedKmh, setSpeedKmh] = useState(0);
+  useEffect(() => {
+    if (!telemetryRef) {
+      return;
+    }
+    let raf = 0;
+    const loop = () => {
+      setSpeedKmh(Math.round(telemetryRef.current?.speedKmh ?? 0));
+      raf = requestAnimationFrame(loop);
+    };
+    raf = requestAnimationFrame(loop);
+    return () => cancelAnimationFrame(raf);
+  }, [telemetryRef]);
+  return speedKmh;
+}
+
+function usePoliceDistance(
+  chaseTelemetryRef?: RefObject<ChaseTelemetry | null>,
+): { distance: number; state: string } {
+  const [value, setValue] = useState({ distance: 0, state: "idle" });
+  useEffect(() => {
+    if (!chaseTelemetryRef) {
+      return;
+    }
+    let raf = 0;
+    const loop = () => {
+      const telemetry = chaseTelemetryRef.current;
+      setValue({
+        distance: Math.round(telemetry?.distanceToPlayer ?? 0),
+        state: telemetry?.state ?? "idle",
+      });
+      raf = requestAnimationFrame(loop);
+    };
+    raf = requestAnimationFrame(loop);
+    return () => cancelAnimationFrame(raf);
+  }, [chaseTelemetryRef]);
+  return value;
+}
+
 function useReducedMotion(): boolean {
   const [reduced, setReduced] = useState(false);
   useEffect(() => {
@@ -23,10 +63,10 @@ interface GameOverlaysProps {
 }
 
 export function GameOverlays({ telemetryRef, chaseTelemetryRef }: GameOverlaysProps) {
-  void telemetryRef;
-  void chaseTelemetryRef;
   const experience = useExperience();
   const reduced = useReducedMotion();
+  const speedKmh = useSpeedKmh(telemetryRef);
+  const police = usePoliceDistance(chaseTelemetryRef);
   const { state, countdownValue } = experience;
 
   return (
@@ -80,6 +120,9 @@ export function GameOverlays({ telemetryRef, chaseTelemetryRef }: GameOverlaysPr
       {state === "playing" && (
         <>
           <GameplayHud
+            speedKmh={speedKmh}
+            policeDistance={police.distance}
+            policeState={police.state}
             escapeProgress={experience.escapeProgress}
             bustProgress={experience.bustProgress}
             reducedMotion={reduced}
@@ -111,36 +154,78 @@ function ProgressBar({ progress, className }: { progress: number; className?: st
 }
 
 function GameplayHud({
+  speedKmh,
+  policeDistance,
+  policeState,
   escapeProgress,
   bustProgress,
   reducedMotion: _reducedMotion,
 }: {
+  speedKmh: number;
+  policeDistance: number;
+  policeState: string;
   escapeProgress: number;
   bustProgress: number;
   reducedMotion: boolean;
 }) {
+  const [showControls, setShowControls] = useState(true);
+  useEffect(() => {
+    const timer = window.setTimeout(() => setShowControls(false), 6000);
+    return () => window.clearTimeout(timer);
+  }, []);
   const showEscape = escapeProgress > 0.04;
   const showBust = bustProgress > 0.04;
-  if (!showEscape && !showBust) {
-    return null;
-  }
-  if (showEscape) {
-    return (
-      <div className="absolute inset-x-0 bottom-14 flex flex-col items-center gap-1.5 px-6">
-        <p className="text-[10px] font-bold uppercase tracking-[0.35em] text-emerald-300">
-          Get Away
-        </p>
-        <ProgressBar progress={escapeProgress} className="max-w-[260px]" />
-      </div>
-    );
-  }
+
   return (
-    <div className="absolute inset-x-0 bottom-14 flex flex-col items-center gap-1.5 px-6">
-      <p className="text-[10px] font-bold uppercase tracking-[0.35em] text-red-300">
-        Police closing in
-      </p>
-      <ProgressBar progress={bustProgress} className="max-w-[260px]" />
-    </div>
+    <>
+      <div className="absolute inset-x-0 top-0 flex items-start justify-between p-4">
+        <div className="flex items-baseline gap-2 rounded-md border border-edge/70 bg-panel/70 px-3 py-1.5 backdrop-blur-sm">
+          <span className="font-mono text-3xl font-bold tabular-nums leading-none text-zinc-50">
+            {speedKmh}
+          </span>
+          <span className="text-[10px] font-semibold uppercase tracking-[0.2em] text-zinc-400">
+            km/h
+          </span>
+        </div>
+        <div className="flex items-baseline gap-2 rounded-md border border-accent/30 bg-panel/70 px-3 py-1.5 backdrop-blur-sm">
+          <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-accent">
+            {policeState === "recovery" ? "Recovery" : "Pursuit"}
+          </span>
+          <span className="font-mono text-2xl font-bold tabular-nums leading-none text-zinc-50">
+            {policeDistance}
+          </span>
+          <span className="text-[10px] uppercase tracking-[0.2em] text-zinc-400">
+            m
+          </span>
+        </div>
+      </div>
+
+      {showEscape && (
+        <div className="absolute inset-x-0 bottom-14 flex flex-col items-center gap-1.5 px-6">
+          <p className="text-[10px] font-bold uppercase tracking-[0.35em] text-emerald-300">
+            Get Away
+          </p>
+          <ProgressBar progress={escapeProgress} className="max-w-[260px]" />
+        </div>
+      )}
+
+      {showBust && !showEscape && (
+        <div className="absolute inset-x-0 bottom-14 flex flex-col items-center gap-1.5 px-6">
+          <p className="text-[10px] font-bold uppercase tracking-[0.35em] text-red-300">
+            Police closing in
+          </p>
+          <ProgressBar progress={bustProgress} className="max-w-[260px]" />
+        </div>
+      )}
+
+      {showControls && (
+        <div className="absolute inset-x-0 bottom-4 flex justify-center">
+          <p className="rounded-md border border-edge/70 bg-panel/70 px-3 py-1.5 text-[10px] uppercase tracking-[0.2em] text-zinc-400 backdrop-blur-sm">
+            WASD Drive &bull; Space Handbrake &bull; R Reset &bull; Esc Inspect
+          </p>
+        </div>
+      )}
+    </>
   );
 }
 
