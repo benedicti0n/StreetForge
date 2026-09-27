@@ -93,7 +93,16 @@ export function ExperienceProvider({ children }: ExperienceProviderProps) {
   const [escapeProgress, setEscapeProgress] = useState(0);
   const [bustProgress, setBustProgress] = useState(0);
   const [result, setResult] = useState<GameResultStats | null>(null);
-  const [introDismissed, setIntroDismissed] = useState(readIntroDismissed);
+  // The intro's dismissed flag is read after mount only, so the server and
+  // the first client render agree (no hydration mismatch).
+  const [introDismissed, setIntroDismissed] = useState(false);
+
+  useEffect(() => {
+    const id = requestAnimationFrame(() => {
+      setIntroDismissed(readIntroDismissed());
+    });
+    return () => cancelAnimationFrame(id);
+  }, []);
 
   const gameRefsRef = useRef<GameRefs | null>(null);
   const [assetsReadyWorldId, setAssetsReadyWorldId] = useState<string | null>(
