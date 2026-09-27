@@ -18,12 +18,12 @@ function hexRgb(hex: string): [number, number, number] {
   ];
 }
 
-export const WATER_COLOR = "#3388DD";
+export const WATER_COLOR = "#3E9BEF";
 
-export const TERRAIN_COLOR = "#93bd6f";
-export const SHOULDER_COLOR = "#bca676";
-export const ASPHALT_COLOR = "#303139";
-export const MARKING_COLOR = "#f2e3a1";
+export const TERRAIN_COLOR = "#7FB069";
+export const SHOULDER_COLOR = "#C2A878";
+export const ASPHALT_COLOR = "#2C2E35";
+export const MARKING_COLOR = "#F2E7C8";
 
 export interface WorldTextureSource {
   /** The authoritative road area (1 = asphalt), grid × grid. */
@@ -138,38 +138,39 @@ export function buildWorldTexture(
   }
   context.putImageData(image, 0, 0);
 
+  // A single light blur pass softens the cell-block pixelation of the
+  // road edges while keeping the overall layout intact.
+  blurCanvasOnce(context, textureSize);
+
   // Center markings painted directly into the texture, only where the
-  // sample point lies inside the road mask.
+  // sample point lies inside the road mask. Dashes run ALONG the
+  // centerline with generous spacing so they read as a clean stylized
+  // marking rather than a dense barcode.
   if (corridorValid && centerline.length >= 4) {
     context.strokeStyle = MARKING_COLOR;
     context.lineCap = "round";
-    context.lineWidth = Math.max(2, scale * 0.7);
-    const dashLength = Math.max(4, scale * 2.2);
-    const gapLength = Math.max(6, scale * 4);
-    for (let i = 0; i < centerline.length; i += 1) {
-      const [gx, gy] = centerline[i];
+    context.lineWidth = Math.max(2, scale * 0.55);
+    const dashStep = Math.max(10, scale * 7);
+    const dashLengthCells = 1.6;
+    for (let i = 0; i < centerline.length; i += dashStep / scale) {
+      const startIndex = Math.min(centerline.length - 1, Math.round(i));
+      const [gx, gy] = centerline[startIndex];
       if (roadMask[gy * grid + gx] === 0) {
         continue;
       }
-      const x = gx * scale;
-      const y = gy * scale;
-      const next = centerline[Math.min(centerline.length - 1, i + 1)];
-      const dx = next[0] - gx;
-      const dy = next[1] - gy;
-      const length = Math.hypot(dx, dy);
-      if (length < 0.001) {
-        continue;
-      }
-      const ux = dx / length;
-      const uy = dy / length;
-      const px = -uy;
-      const py = ux;
-      // A short dash perpendicular to the centerline at this sample.
+      const endIndex = Math.min(
+        centerline.length - 1,
+        startIndex + Math.round(dashLengthCells),
+      );
+      const [gx2, gy2] = centerline[endIndex];
+      const x1 = gx * scale;
+      const y1 = gy * scale;
+      const x2 = gx2 * scale;
+      const y2 = gy2 * scale;
       context.beginPath();
-      context.moveTo(x - px * dashLength * 0.4, y - py * dashLength * 0.4);
-      context.lineTo(x + px * dashLength * 0.4, y + py * dashLength * 0.4);
+      context.moveTo(x1, y1);
+      context.lineTo(x2, y2);
       context.stroke();
-      i += gapLength / scale;
     }
   }
 
@@ -183,6 +184,36 @@ export function buildWorldTexture(
       roadCoverage: roadPixels / (total * scale * scale),
     },
   };
+}
+
+/** One-pass 3x3 box blur over the whole canvas. */
+function blurCanvasOnce(
+  context: CanvasRenderingContext2D,
+  size: number,
+): void {
+  const source = context.getImageData(0, 0, size, size);
+  const { data } = source;
+  const copy = new Uint8ClampedArray(data);
+  for (let y = 1; y < size - 1; y++) {
+    for (let x = 1; x < size - 1; x++) {
+      let r = 0;
+      let g = 0;
+      let b = 0;
+      for (let dy = -1; dy <= 1; dy++) {
+        for (let dx = -1; dx <= 1; dx++) {
+          const o = ((y + dy) * size + (x + dx)) * 4;
+          r += copy[o];
+          g += copy[o + 1];
+          b += copy[o + 2];
+        }
+      }
+      const o = (y * size + x) * 4;
+      data[o] = r / 9;
+      data[o + 1] = g / 9;
+      data[o + 2] = b / 9;
+    }
+  }
+  context.putImageData(source, 0, 0);
 }
 
 /**

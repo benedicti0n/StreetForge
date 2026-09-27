@@ -25,31 +25,31 @@ const TERRAIN_FALLBACK_MATERIAL = new MeshStandardMaterial({
   roughness: 1,
 });
 const BUILDING_MATERIAL = new MeshStandardMaterial({
-  color: "#9aa3ae",
+  color: "#ADB5BF",
   roughness: 0.9,
 });
 const BUILDING_ROOF_MATERIAL = new MeshStandardMaterial({
-  color: "#7d8794",
+  color: "#6E7680",
   roughness: 0.85,
 });
 const WEDGE_MATERIAL = new MeshStandardMaterial({
-  color: "#3c3c42",
+  color: "#2E2E33",
   roughness: 0.9,
 });
 const WEDGE_EDGE_MATERIAL = new MeshStandardMaterial({
-  color: "#e0a82e",
-  roughness: 0.7,
+  color: "#FFB03A",
+  roughness: 0.6,
 });
 const TRUNK_MATERIAL = new MeshStandardMaterial({
-  color: "#8a5a33",
+  color: "#7A4E2A",
   roughness: 1,
 });
 const CANOPY_MATERIAL = new MeshStandardMaterial({
-  color: "#3e7c3f",
+  color: "#3FA34B",
   roughness: 1,
 });
 const CANOPY_LIGHT_MATERIAL = new MeshStandardMaterial({
-  color: "#55a056",
+  color: "#5CC05E",
   roughness: 1,
 });
 const WALL_MATERIAL = new MeshStandardMaterial({
