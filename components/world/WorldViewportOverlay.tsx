@@ -16,6 +16,7 @@ interface WorldViewportOverlayProps {
   muted?: boolean;
   onToggleMute?: () => void;
   loadingWorld?: boolean;
+  generationActive?: boolean;
   colliderDebug?: boolean;
   onToggleColliderDebug?: () => void;
   loadingVehicles?: boolean;
@@ -74,6 +75,7 @@ export function WorldViewportOverlay({
   muted = false,
   onToggleMute,
   loadingWorld = false,
+  generationActive = false,
   colliderDebug = false,
   onToggleColliderDebug,
   loadingVehicles = false,
@@ -152,10 +154,11 @@ export function WorldViewportOverlay({
                 event.stopPropagation();
                 onEnterDriveMode?.();
               }}
+              disabled={generationActive}
               aria-label="Activate driving mode and vehicle controls"
-              className="pointer-events-auto rounded-md border border-accent/50 bg-accent/10 px-3 py-1.5 text-[11px] font-bold uppercase tracking-[0.15em] text-accent transition-colors hover:bg-accent/20 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+              className="pointer-events-auto rounded-md border border-accent/50 bg-accent/10 px-3 py-1.5 text-[11px] font-bold uppercase tracking-[0.15em] text-accent transition-colors hover:bg-accent/20 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:cursor-not-allowed disabled:opacity-40"
             >
-              Drive
+              {generationActive ? "Generating…" : "Drive"}
             </button>
           )}
           <button

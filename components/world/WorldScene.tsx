@@ -10,7 +10,9 @@ import {
 } from "react";
 import { PhysicsVehicle, type PhysicsVehicleHandle } from "./vehicles/PhysicsVehicle";
 import { GeneratedWorld } from "./generated/GeneratedWorld";
+import type { SafeSpawnResult } from "./generated/SafeSpawnResolver";
 import type { GeneratedWorldDescriptor } from "@/lib/worldlabs/types";
+import type { WorldMode } from "./generation/WorldPipeline";
 import { type VehicleId } from "./vehicles/vehicleDefinitions";
 import {
   type VehicleControlRef,
@@ -75,6 +77,10 @@ interface WorldSceneProps {
   driveMode?: boolean;
   generatedWorld?: GeneratedWorldDescriptor | null;
   colliderDebug?: boolean;
+  worldMode?: WorldMode;
+  generatedSpawns?: SafeSpawnResult | null;
+  generatedHalfExtent?: number | null;
+  onColliderReady?: (spawns: SafeSpawnResult, halfExtent: number) => void;
   onSplatReady?: () => void;
   onVehicleLoaded?: () => void;
   onVehicleLoadFailed?: () => void;
@@ -93,6 +99,10 @@ export function WorldScene({
   driveMode = false,
   generatedWorld,
   colliderDebug = false,
+  worldMode = "sandbox",
+  generatedSpawns = null,
+  generatedHalfExtent = null,
+  onColliderReady,
   onSplatReady,
   onVehicleLoaded,
   onVehicleLoadFailed,
@@ -121,11 +131,17 @@ export function WorldScene({
         shadow-camera-far={80}
         shadow-bias={-0.0005}
       />
-      <mesh rotation-x={-Math.PI / 2} position={[0, 0, 0]} receiveShadow>
-        <planeGeometry args={[WORLD_SIZE, WORLD_SIZE]} />
-        <meshStandardMaterial color="#1c1c20" roughness={0.95} metalness={0} />
-      </mesh>
-      <Grid
+      {worldMode === "sandbox" && (
+        <mesh rotation-x={-Math.PI / 2} position={[0, 0, 0]} receiveShadow>
+          <planeGeometry args={[WORLD_SIZE, WORLD_SIZE]} />
+          <meshStandardMaterial
+            color="#1c1c20"
+            roughness={0.95}
+            metalness={0}
+          />
+        </mesh>
+      )}
+      {worldMode === "sandbox" && <Grid
         position={[0, 0.005, 0]}
         cellSize={2}
         cellThickness={0.6}
@@ -137,13 +153,14 @@ export function WorldScene({
         fadeStrength={2}
         infiniteGrid
         followCamera={false}
-      />
-      <PhysicsWorld>
+      />}
+      <PhysicsWorld hasGround={worldMode === "sandbox"}>
         {generatedWorld && (
           <GeneratedWorld
             descriptor={generatedWorld}
             colliderDebug={colliderDebug}
             onSplatReady={onSplatReady}
+            onColliderReady={onColliderReady}
           />
         )}
         <PoliceChaseController
@@ -163,7 +180,18 @@ export function WorldScene({
                 controls={vehicleControls[id]}
                 isPlayer={id === "race"}
                 autoResetBelowY={WORLD_FALL_RESET_Y}
-                autoResetHalfExtent={WORLD_RESET_BOUNDS}
+                autoResetHalfExtent={
+                  worldMode === "generated" && generatedHalfExtent
+                    ? generatedHalfExtent
+                    : WORLD_RESET_BOUNDS
+                }
+                spawnOverride={
+                  generatedSpawns
+                    ? id === "race"
+                      ? generatedSpawns.player.position
+                      : generatedSpawns.police.position
+                    : undefined
+                }
                 bodyRef={
                   id === "race" ? playerBodyRef : policeBodyRef
                 }

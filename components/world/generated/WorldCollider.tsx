@@ -12,6 +12,7 @@ import {
 } from "three";
 import type { GeneratedWorldDescriptor } from "@/lib/worldlabs/types";
 import { createWorldTransform, type WorldTransform } from "./worldTransform";
+import { findSafeSpawn, type SafeSpawnResult } from "./SafeSpawnResolver";
 
 const _vertex = new Vector3();
 const _gltfLoader = new GLTFLoader();
@@ -73,7 +74,7 @@ export function buildColliderGeometry(
 interface WorldColliderProps {
   descriptor: GeneratedWorldDescriptor;
   debug?: boolean;
-  onReady?: () => void;
+  onReady?: (spawns: SafeSpawnResult, halfExtent: number) => void;
   onError?: () => void;
 }
 
@@ -121,15 +122,37 @@ export function WorldCollider({
     return buildColliderGeometry(scene, transform);
   }, [scene, transform, failed]);
 
+  const worldInfo = useMemo(() => {
+    if (!result) {
+      return null;
+    }
+    result.geometry.computeBoundingBox();
+    const box = result.geometry.boundingBox;
+    if (!box) {
+      return null;
+    }
+    const halfExtent =
+      Math.max(
+        Math.abs(box.min.x),
+        Math.abs(box.max.x),
+        Math.abs(box.min.z),
+        Math.abs(box.max.z),
+      ) * 1.1;
+    const spawns = findSafeSpawn(result.geometry);
+    return spawns ? { spawns, halfExtent } : null;
+  }, [result]);
+
   const handleReady = useCallback(() => {
-    onReady?.();
-  }, [onReady]);
+    if (worldInfo) {
+      onReady?.(worldInfo.spawns, worldInfo.halfExtent);
+    }
+  }, [worldInfo, onReady]);
 
   useEffect(() => {
-    if (result) {
+    if (worldInfo) {
       handleReady();
     }
-  }, [result, handleReady]);
+  }, [worldInfo, handleReady]);
 
   if (!result) {
     return null;

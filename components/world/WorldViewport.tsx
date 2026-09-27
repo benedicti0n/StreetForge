@@ -24,6 +24,7 @@ import {
   type VehicleId,
 } from "./vehicles/vehicleDefinitions";
 import type { PhysicsVehicleHandle } from "./vehicles/PhysicsVehicle";
+import type { SafeSpawnResult } from "./generated/SafeSpawnResolver";
 import type { ChaseTelemetry } from "./police/PoliceChaseController";
 import type { RapierRigidBody } from "@react-three/rapier";
 import {
@@ -93,6 +94,12 @@ export function WorldViewport() {
     ready: boolean;
   }>({ worldId: "", ready: false });
   const [colliderDebug, setColliderDebug] = useState(false);
+  const [colliderInfo, setColliderInfo] = useState<{
+    worldId: string;
+    spawns: SafeSpawnResult;
+    halfExtent: number;
+  } | null>(null);
+  const previousPhaseRef = useRef(pipeline.generationState.phase);
 
   const handleSplatReady = useCallback(() => {
     setSplatState((state) => ({ ...state, ready: true }));
@@ -104,6 +111,18 @@ export function WorldViewport() {
       splatState.worldId === pipeline.generatedWorld.worldId &&
       splatState.ready
     );
+
+  const generationActive =
+    pipeline.generationState.phase === "capturing" ||
+    pipeline.generationState.phase === "submitting" ||
+    pipeline.generationState.phase === "generating" ||
+    pipeline.generationState.phase === "fetchingWorld";
+
+  const worldReadyForGenerated =
+    pipeline.generatedWorld !== null &&
+    splatState.worldId === pipeline.generatedWorld.worldId &&
+    splatState.ready &&
+    colliderInfo?.worldId === pipeline.generatedWorld.worldId;
 
   const vehicleControlsRef = useMemo(
     () =>
@@ -149,7 +168,41 @@ export function WorldViewport() {
     });
   }, []);
 
+  useEffect(() => {
+    const phase = pipeline.generationState.phase;
+    if (
+      generationActive &&
+      previousPhaseRef.current !== phase &&
+      driveMode
+    ) {
+      handleExitDriveMode();
+    }
+    previousPhaseRef.current = phase;
+  }, [
+    pipeline.generationState.phase,
+    generationActive,
+    driveMode,
+    handleExitDriveMode,
+  ]);
+
+  useEffect(() => {
+    if (worldReadyForGenerated && pipeline.worldMode === "sandbox") {
+      pipeline.setWorldMode("generated");
+    }
+  }, [worldReadyForGenerated, pipeline]);
+
   useVehicleAudio({ playerTelemetryRef });
+
+  const handleColliderReady = useCallback(
+    (spawns: SafeSpawnResult, halfExtent: number) => {
+      setColliderInfo({
+        worldId: pipeline.generatedWorld?.worldId ?? "",
+        spawns,
+        halfExtent,
+      });
+    },
+    [pipeline.generatedWorld],
+  );
 
   const handleResetPlayerVehicle = useCallback(() => {
     playerVehicleRef.current?.reset();
@@ -270,6 +323,7 @@ export function WorldViewport() {
             telemetryRef={playerTelemetryRef}
             chaseTelemetryRef={chaseTelemetryRef}
             loadingWorld={loadingWorld}
+            generationActive={generationActive}
             colliderDebug={colliderDebug}
             onToggleColliderDebug={() => setColliderDebug((d) => !d)}
             sirenActive={sirenActive}

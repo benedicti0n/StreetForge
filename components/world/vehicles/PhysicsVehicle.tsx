@@ -47,6 +47,7 @@ interface PhysicsVehicleProps {
   isPlayer?: boolean;
   autoResetBelowY?: number;
   autoResetHalfExtent?: number;
+  spawnOverride?: [number, number, number];
   bodyRef?: RefObject<RapierRigidBody | null>;
   onLoad?: () => void;
   onTelemetry?: (telemetry: VehicleTelemetry) => void;
@@ -82,6 +83,7 @@ export const PhysicsVehicle = forwardRef<
     isPlayer = false,
     autoResetBelowY,
     autoResetHalfExtent,
+    spawnOverride,
     bodyRef,
     onLoad,
     onTelemetry,
@@ -163,7 +165,7 @@ export const PhysicsVehicle = forwardRef<
     if (!body) {
       return;
     }
-    const spawn = definition.worldPosition;
+    const spawn = spawnOverride ?? definition.worldPosition;
     const rotation = definition.visualRotation;
     body.setTranslation({ x: spawn[0], y: spawn[1], z: spawn[2] }, true);
     body.setRotation(
@@ -173,9 +175,15 @@ export const PhysicsVehicle = forwardRef<
     body.setLinvel({ x: 0, y: 0, z: 0 }, true);
     body.setAngvel({ x: 0, y: 0, z: 0 }, true);
     body.wakeUp();
-  }, [definition.worldPosition, definition.visualRotation]);
+  }, [definition.worldPosition, definition.visualRotation, spawnOverride]);
 
   useImperativeHandle(ref, () => ({ reset: handleReset }), [handleReset]);
+
+  useEffect(() => {
+    if (spawnOverride) {
+      handleReset();
+    }
+  }, [spawnOverride, handleReset]);
 
   const handleCollision = useCallback(
     (payload: {

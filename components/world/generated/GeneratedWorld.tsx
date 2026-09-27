@@ -4,6 +4,7 @@ import { useCallback, useMemo } from "react";
 import type { GeneratedWorldDescriptor } from "@/lib/worldlabs/types";
 import { createWorldTransform, selectSplatUrl } from "./worldTransform";
 import { WorldCollider } from "./WorldCollider";
+import type { SafeSpawnResult } from "./SafeSpawnResolver";
 
 export type WorldAssetState = "loading" | "ready" | "error";
 
@@ -11,7 +12,7 @@ interface GeneratedWorldProps {
   descriptor: GeneratedWorldDescriptor;
   colliderDebug?: boolean;
   onSplatReady?: () => void;
-  onColliderReady?: () => void;
+  onColliderReady?: (spawns: SafeSpawnResult, halfExtent: number) => void;
   onColliderError?: () => void;
 }
 

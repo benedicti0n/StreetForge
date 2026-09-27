@@ -6,10 +6,15 @@ import { WORLD_HALF_EXTENT } from "../worldConstants";
 
 const GROUND_THICKNESS_HALF = 0.5;
 
-export function PhysicsWorld({ children }: { children: ReactNode }) {
+interface PhysicsWorldProps {
+  children: ReactNode;
+  hasGround?: boolean;
+}
+
+export function PhysicsWorld({ children, hasGround = true }: PhysicsWorldProps) {
   return (
     <Physics gravity={[0, -9.81, 0]} timeStep={1 / 60}>
-      <RigidBody type="fixed" colliders={false}>
+      {hasGround && <RigidBody type="fixed" colliders={false}>
         <CuboidCollider
           args={[
             WORLD_HALF_EXTENT,
@@ -20,7 +25,7 @@ export function PhysicsWorld({ children }: { children: ReactNode }) {
           friction={0.9}
           restitution={0.05}
         />
-      </RigidBody>
+      </RigidBody>}
       {children}
     </Physics>
   );
