@@ -222,7 +222,12 @@ export const PhysicsVehicle = forwardRef<
     }
 
     const control = controls.current;
-    if (isPlayer && control.throttle !== 0) {
+    const isIdle =
+      control.throttle === 0 &&
+      control.brake >= 1 &&
+      control.steering === 0 &&
+      control.handbrake >= 1;
+    if (!isIdle) {
       body.wakeUp();
     }
 

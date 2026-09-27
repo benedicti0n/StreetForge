@@ -105,7 +105,7 @@ export function PoliceChaseController({
     _toTarget.y = 0;
 
     _policeQuaternion.copy(police.rotation() as unknown as Quaternion);
-    _policeForward.set(0, 0, -1).applyQuaternion(_policeQuaternion);
+    _policeForward.set(0, 0, 1).applyQuaternion(_policeQuaternion);
     _policeForward.y = 0;
     const forwardLen = _policeForward.length();
     const headingError =
@@ -132,14 +132,51 @@ export function PoliceChaseController({
       police.linvel().y,
       police.linvel().z,
     );
-    const speedRatio = clamp(policeSpeed / config.farCruiseSpeed, 0, 1);
-    const headingFactor =
-      Math.abs(headingError) < config.throttleCutError ? 1 : 0;
-    const throttle = headingFactor * (1 - speedRatio * 0.4);
+    const playerSpeed = Math.hypot(
+      player.linvel().x,
+      player.linvel().y,
+      player.linvel().z,
+    );
+    const absError = Math.abs(headingError);
+
+    let desiredSpeed: number;
+    if (distance > config.farDistance) {
+      desiredSpeed = config.farCruiseSpeed;
+    } else if (distance > config.closeDistance) {
+      const t =
+        (distance - config.closeDistance) /
+        (config.farDistance - config.closeDistance);
+      desiredSpeed =
+        config.midCruiseSpeed +
+        (config.farCruiseSpeed - config.midCruiseSpeed) * t;
+    } else if (distance > config.veryCloseDistance) {
+      desiredSpeed = config.closeCruiseSpeed;
+    } else {
+      desiredSpeed = config.veryCloseSpeed;
+    }
+    if (playerSpeed < 1.5 && distance < config.closeDistance) {
+      desiredSpeed = Math.min(desiredSpeed, config.stationaryApproachSpeed);
+    }
+
+    const errorSlowdown = 1 - clamp((absError - 0.4) / 1.4, 0, 0.65);
+    desiredSpeed *= errorSlowdown;
+
+    let throttle = 0;
+    let brake = 0;
+    if (absError > config.brakeError) {
+      brake = 0.8;
+    } else if (policeSpeed < desiredSpeed - 0.5) {
+      throttle = clamp((desiredSpeed - policeSpeed) / 8, 0.2, 1);
+    } else if (policeSpeed > desiredSpeed + 1) {
+      brake = clamp((policeSpeed - desiredSpeed) / 6, 0.15, 0.7);
+    } else {
+      throttle = 0.12;
+    }
 
     Object.assign(policeControlsRef.current, {
       ...NEUTRAL_CONTROLS,
-      throttle: Math.max(0.15, throttle),
+      throttle,
+      brake,
       steering,
     });
 
