@@ -16,7 +16,7 @@ export const MIN_PROP_AREA = 6;
 /** Blobs at or below this area become a single tree. */
 export const TREE_MAX_AREA = 40;
 /** Wide/flat blobs at or above this aspect become a ramp. */
-export const RAMP_MIN_ASPECT = 1.8;
+export const RAMP_MIN_ASPECT = 1.3;
 
 export interface ParsedSketch {
   grid: number;
