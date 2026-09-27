@@ -17,10 +17,13 @@ import type { RapierRigidBody } from "@react-three/rapier";
 import { PhysicsWorld } from "./physics/PhysicsWorld";
 import { WorldCameraControls } from "./WorldCameraControls";
 import { VehicleFollowCamera } from "./camera/VehicleFollowCamera";
+import {
+  WORLD_FALL_RESET_Y,
+  WORLD_RESET_BOUNDS,
+  WORLD_SIZE,
+} from "./worldConstants";
 
 type ControlsRef = React.ElementRef<typeof OrbitControls>;
-
-export const WORLD_GROUND_SIZE = 100;
 
 class VehicleLoadErrorBoundary extends Component<
   { children: ReactNode; onFail?: () => void },
@@ -93,7 +96,7 @@ export function WorldScene({
         shadow-bias={-0.0005}
       />
       <mesh rotation-x={-Math.PI / 2} position={[0, 0, 0]} receiveShadow>
-        <planeGeometry args={[WORLD_GROUND_SIZE, WORLD_GROUND_SIZE]} />
+        <planeGeometry args={[WORLD_SIZE, WORLD_SIZE]} />
         <meshStandardMaterial color="#1c1c20" roughness={0.95} metalness={0} />
       </mesh>
       <Grid
@@ -104,7 +107,7 @@ export function WorldScene({
         sectionSize={10}
         sectionThickness={1}
         sectionColor="#3a3a42"
-        fadeDistance={60}
+        fadeDistance={80}
         fadeStrength={2}
         infiniteGrid
         followCamera={false}
@@ -119,7 +122,8 @@ export function WorldScene({
                 vehicle={id}
                 controls={vehicleControls[id]}
                 isPlayer={id === "race"}
-                autoResetBelowY={id === "race" ? -10 : undefined}
+                autoResetBelowY={WORLD_FALL_RESET_Y}
+                autoResetHalfExtent={WORLD_RESET_BOUNDS}
                 bodyRef={id === "race" ? playerBodyRef : undefined}
                 telemetryRef={
                   id === "race" ? playerTelemetryRef : policeTelemetryRef

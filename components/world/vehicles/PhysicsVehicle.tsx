@@ -46,6 +46,7 @@ interface PhysicsVehicleProps {
   controls: VehicleControlRef;
   isPlayer?: boolean;
   autoResetBelowY?: number;
+  autoResetHalfExtent?: number;
   bodyRef?: RefObject<RapierRigidBody | null>;
   onLoad?: () => void;
   onTelemetry?: (telemetry: VehicleTelemetry) => void;
@@ -80,6 +81,7 @@ export const PhysicsVehicle = forwardRef<
     controls,
     isPlayer = false,
     autoResetBelowY,
+    autoResetHalfExtent,
     bodyRef,
     onLoad,
     onTelemetry,
@@ -207,9 +209,14 @@ export const PhysicsVehicle = forwardRef<
       return;
     }
 
+    const translation = body.translation();
+    const outsideBounds =
+      autoResetHalfExtent !== undefined &&
+      (Math.abs(translation.x) > autoResetHalfExtent ||
+        Math.abs(translation.z) > autoResetHalfExtent);
     if (
-      autoResetBelowY !== undefined &&
-      body.translation().y < autoResetBelowY
+      (autoResetBelowY !== undefined && translation.y < autoResetBelowY) ||
+      outsideBounds
     ) {
       handleReset();
     }
