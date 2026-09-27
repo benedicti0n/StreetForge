@@ -1,13 +1,18 @@
 "use client";
 
+import type { RefObject } from "react";
 import { useExperience } from "./ExperienceProvider";
+import type { VehicleTelemetry } from "@/components/world/vehicles/vehicleTypes";
+import type { ChaseTelemetry } from "@/components/world/police/PoliceChaseController";
 
 interface GameOverlaysProps {
-  telemetryRef?: never;
-  chaseTelemetryRef?: never;
+  telemetryRef?: RefObject<VehicleTelemetry | null>;
+  chaseTelemetryRef?: RefObject<ChaseTelemetry | null>;
 }
 
-export function GameOverlays(_props: GameOverlaysProps) {
+export function GameOverlays({ telemetryRef, chaseTelemetryRef }: GameOverlaysProps) {
+  void telemetryRef;
+  void chaseTelemetryRef;
   const experience = useExperience();
   const { state } = experience;
 
