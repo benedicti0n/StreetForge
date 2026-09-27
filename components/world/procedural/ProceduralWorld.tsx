@@ -15,8 +15,20 @@ import {
   buildWedge,
 } from "@/lib/sketchworld/geometry";
 import { traceBoundary } from "@/lib/sketchworld/parseSketch";
-import { Shape, ShapeGeometry } from "three";
+import { Shape, ShapeGeometry, Vector3 } from "three";
 import type { SafeSpawnResult } from "@/components/world/generated/SafeSpawnResolver";
+import {
+  cloneModel,
+  fitModelScale,
+  modelBounds,
+  modelLength,
+  useWorldAsset,
+  WORLD_ASSETS,
+} from "@/lib/worldAssets";
+/** Road asset pieces are laid along the route every this many meters. */
+const ROAD_SEGMENT_SPACING = 8;
+/** Trees are fitted so their height is about this many meters (x variation). */
+const TREE_TARGET_HEIGHT = 5;
 
 const WALL_HEIGHT = 3.5;
 const WALL_THICKNESS = 1.2;
@@ -190,6 +202,80 @@ export function ProceduralWorld({
     handleReady();
   }, [handleReady]);
 
+  const roadAsset = useWorldAsset(WORLD_ASSETS.roads);
+  const treeAsset = useWorldAsset(WORLD_ASSETS.trees);
+  const buildingAsset = useWorldAsset(WORLD_ASSETS.buildings);
+  const waterAsset = useWorldAsset(WORLD_ASSETS.water);
+  const rampAsset = useWorldAsset(WORLD_ASSETS.ramps);
+
+  // Road asset pieces placed along the authoritative centerline. The painted
+  // base road stays underneath, so the drivable layout never changes.
+  const roadPlacements = useMemo(() => {
+    if (!roadAsset || !descriptor.road.points) {
+      return null;
+    }
+    const length = Math.max(modelLength(roadAsset), 0.5);
+    const placements: Array<{
+      position: [number, number, number];
+      yaw: number;
+      scale: Vector3;
+    }> = [];
+    let travelled = 0;
+    let i = 1;
+    while (i < descriptor.road.points.length) {
+      const [x0, z0] = descriptor.road.points[i - 1];
+      const [x1, z1] = descriptor.road.points[i];
+      const dx = x1 - x0;
+      const dz = z1 - z0;
+      const seg = Math.hypot(dx, dz);
+      if (seg < 1e-4) {
+        i++;
+        continue;
+      }
+      travelled += seg;
+      if (travelled >= ROAD_SEGMENT_SPACING) {
+        travelled = 0;
+        placements.push({
+          position: [x1, 0.02, z1],
+          yaw: Math.atan2(dx, dz),
+          scale: fitModelScale(roadAsset, descriptor.road.width, length),
+        });
+      }
+      i++;
+    }
+    return placements;
+  }, [roadAsset, descriptor.road]);
+
+  const treeModelScale = useMemo(() => {
+    if (!treeAsset) {
+      return null;
+    }
+    const height = Math.max(modelBounds(treeAsset).getSize(new Vector3()).y, 0.01);
+    return TREE_TARGET_HEIGHT / height;
+  }, [treeAsset]);
+
+  const waterBounds = useMemo(() => {
+    if (!waterAsset || !waterContourWorld) {
+      return null;
+    }
+    let minX = Infinity;
+    let maxX = -Infinity;
+    let minZ = Infinity;
+    let maxZ = -Infinity;
+    for (const [x, z] of waterContourWorld) {
+      minX = Math.min(minX, x);
+      maxX = Math.max(maxX, x);
+      minZ = Math.min(minZ, z);
+      maxZ = Math.max(maxZ, z);
+    }
+    const cx = (minX + maxX) / 2;
+    const cz = (minZ + maxZ) / 2;
+    return {
+      position: [cx, 0.02, cz] as [number, number, number],
+      scale: fitModelScale(waterAsset, maxX - minX, maxZ - minZ, 4),
+    };
+  }, [waterAsset, waterContourWorld]);
+
   return (
     <group>
       <RigidBody type="fixed" colliders={false}>
@@ -278,38 +364,64 @@ export function ProceduralWorld({
       )}
 
       {/* Buildings */}
-      {(descriptor.semantic?.buildings ?? []).map((building, index) => (
-        <group key={`building-mesh-${index}`}>
-          <mesh
-            geometry={buildingGeometries[index]}
-            material={BUILDING_MATERIAL}
+      {(descriptor.semantic?.buildings ?? []).map((building, index) =>
+        buildingAsset ? (
+          <primitive
+            key={`building-mesh-${index}`}
+            object={cloneModel(buildingAsset)}
             position={[
               building.position[0],
               building.size[1] / 2,
               building.position[2],
             ]}
-            castShadow
-            receiveShadow
-          />
-          <mesh
-            geometry={roofGeometries[index]}
-            material={BUILDING_ROOF_MATERIAL}
-            position={[
-              building.position[0],
-              building.size[1] + 0.3,
-              building.position[2],
-            ]}
+            scale={fitModelScale(
+              buildingAsset,
+              building.size[0],
+              building.size[2],
+            )}
             castShadow
           />
-        </group>
-      ))}
+        ) : (
+          <group key={`building-mesh-${index}`}>
+            <mesh
+              geometry={buildingGeometries[index]}
+              material={BUILDING_MATERIAL}
+              position={[
+                building.position[0],
+                building.size[1] / 2,
+                building.position[2],
+              ]}
+              castShadow
+              receiveShadow
+            />
+            <mesh
+              geometry={roofGeometries[index]}
+              material={BUILDING_ROOF_MATERIAL}
+              position={[
+                building.position[0],
+                building.size[1] + 0.3,
+                building.position[2],
+              ]}
+              castShadow
+            />
+          </group>
+        ),
+      )}
 
       {/* Water surface (saturated blue, un-washed by lighting) */}
-      {waterSurfaceGeometry && (
-        <mesh
-          geometry={waterSurfaceGeometry}
-          material={WATER_SURFACE_MATERIAL}
+      {waterAsset && waterBounds ? (
+        <primitive
+          object={cloneModel(waterAsset)}
+          position={waterBounds.position}
+          scale={waterBounds.scale}
         />
+      ) : (
+        waterSurfaceGeometry && (
+          <mesh
+            geometry={waterSurfaceGeometry}
+            material={WATER_SURFACE_MATERIAL}
+          />
+        )
       )}
 
       {/* Ramps */}
@@ -319,25 +431,35 @@ export function ProceduralWorld({
           position={ramp.position}
           rotation={[0, ramp.yaw, 0]}
         >
-          <mesh
-            geometry={wedgeGeometry}
-            material={WEDGE_MATERIAL}
-            castShadow
-            receiveShadow
-          />
-          <mesh
-            geometry={buildBox(9.2, 0.5, 0.6)}
-            material={WEDGE_EDGE_MATERIAL}
-            position={[0, 0.25, -5.2]}
-            castShadow
-          />
+          {rampAsset ? (
+            <primitive
+              object={cloneModel(rampAsset)}
+              scale={fitModelScale(rampAsset, ramp.width, ramp.depth)}
+              castShadow
+            />
+          ) : (
+            <>
+              <mesh
+                geometry={wedgeGeometry}
+                material={WEDGE_MATERIAL}
+                castShadow
+                receiveShadow
+              />
+              <mesh
+                geometry={buildBox(9.2, 0.5, 0.6)}
+                material={WEDGE_EDGE_MATERIAL}
+                position={[0, 0.25, -5.2]}
+                castShadow
+              />
+            </>
+          )}
         </group>
       ))}
 
       {/* Vegetation */}
       {(descriptor.semantic?.vegetation ?? []).map((tree, index) => {
         const variant = index % 3;
-        return (
+        const fallback = (
           <group
             key={`tree-mesh-${index}`}
             position={tree.position}
@@ -351,14 +473,41 @@ export function ProceduralWorld({
             />
             <mesh
               geometry={treeGeometry.canopy}
-              material={variant === 1 ? CANOPY_LIGHT_MATERIAL : CANOPY_MATERIAL}
+              material={
+                variant === 1 ? CANOPY_LIGHT_MATERIAL : CANOPY_MATERIAL
+              }
               position={[0, 2.2, 0]}
               scale={[variant === 2 ? 1.15 : 1, 1, variant === 2 ? 1.15 : 1]}
               castShadow
             />
           </group>
         );
+        return treeAsset && treeModelScale ? (
+          <primitive
+            key={`tree-mesh-${index}`}
+            object={cloneModel(treeAsset)}
+            position={tree.position}
+            scale={treeModelScale * tree.scale}
+            rotation={[0, (index * 0.9) % (Math.PI * 2), 0]}
+            castShadow
+          />
+        ) : (
+          fallback
+        );
       })}
+
+      {/* Road asset pieces along the generated route (base road stays) */}
+      {roadAsset &&
+        roadPlacements?.map((placement, index) => (
+          <primitive
+            key={`road-piece-${index}`}
+            object={cloneModel(roadAsset)}
+            position={placement.position}
+            rotation={[0, placement.yaw, 0]}
+            scale={placement.scale}
+            receiveShadow
+          />
+        ))}
 
       {/* Walls + caps */}
       {walls(descriptor.worldSize).map((wall, index) => (
