@@ -50,6 +50,12 @@ export interface ProceduralWorldDescriptor {
 }
 
 export const PROCEDURAL_WORLD_SIZE = 160;
+/**
+ * The playable reset bounds extend beyond the boundary walls (which sit at
+ * worldSize/2 + wall thickness). The vehicle auto-reset must only catch
+ * genuine escapes/falls - never the normal drivable arena.
+ */
+const PLAYABLE_HALF_EXTENT = PROCEDURAL_WORLD_SIZE / 2 + 15;
 const ROAD_RAISE = 0.07;
 const SPAWN_PLAYER_ALONG = 0.35;
 const SPAWN_POLICE_BEHIND_M = 12;
@@ -264,7 +270,7 @@ export async function buildProceduralWorld(
     buildings,
     trees,
     spawns: { player, police },
-    halfExtent: worldSize / 2,
+    halfExtent: PLAYABLE_HALF_EXTENT,
   };
 }
 export interface SemanticWorldProps {
@@ -430,6 +436,6 @@ export async function buildProceduralWorldFromNormalized(
     buildings,
     trees: vegetation,
     spawns: { player, police },
-    halfExtent: worldSize / 2,
+    halfExtent: PLAYABLE_HALF_EXTENT,
   };
 }
