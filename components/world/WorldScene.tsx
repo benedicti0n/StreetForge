@@ -201,15 +201,15 @@ export function WorldScene({
       />
       {proceduralWorld ? (
         <>
-          <hemisphereLight args={["#eaf5ff", "#5d8a4c", 1.25]} />
-          <ambientLight intensity={0.18} />
+          <hemisphereLight args={["#eaf5ff", "#5d8a4c", 1.1]} />
+          <ambientLight intensity={0.14} />
         </>
       ) : (
         <hemisphereLight args={["#c9ced6", "#17171a", 1.1]} />
       )}
       <directionalLight
         position={[proceduralWorld ? 30 : 20, proceduralWorld ? 45 : 30, proceduralWorld ? 20 : 10]}
-        intensity={proceduralWorld ? 2.3 : 2.5}
+        intensity={proceduralWorld ? 2.0 : 2.5}
         castShadow
         shadow-mapSize={[2048, 2048]}
         shadow-camera-left={proceduralWorld ? -110 : -30}

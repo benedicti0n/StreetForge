@@ -318,7 +318,7 @@ function loadImageElement(dataUrl: string): Promise<HTMLImageElement> {
         } catch {
           return fail("validate");
         }
-        {
+        if (process.env.NODE_ENV === "development") {
           console.info(
             "[streetforge] semantic parse",
             JSON.stringify({

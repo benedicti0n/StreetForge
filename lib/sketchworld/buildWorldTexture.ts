@@ -20,7 +20,7 @@ function hexRgb(hex: string): [number, number, number] {
 
 export const WATER_COLOR = "#3E9BEF";
 
-export const TERRAIN_COLOR = "#7FB069";
+export const TERRAIN_COLOR = "#6E9E58";
 export const SHOULDER_COLOR = "#C2A878";
 export const ASPHALT_COLOR = "#2C2E35";
 export const MARKING_COLOR = "#F2E7C8";
