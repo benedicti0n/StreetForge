@@ -72,15 +72,15 @@ class VehicleAudioEngine {
     return this.muted;
   }
 
-  setSirenActive(active: boolean): void {
+  setSirenActive(active: boolean, fadeSeconds = active ? 0.15 : 0.4): void {
     this.sirenActive = active;
     if (!this.context || !this.sirenGain) {
       return;
     }
     this.sirenGain.gain.setTargetAtTime(
-      active ? 0.09 : 0,
+      active ? 0.075 : 0,
       this.context.currentTime,
-      active ? 0.15 : 0.3,
+      fadeSeconds,
     );
   }
 
@@ -114,7 +114,8 @@ class VehicleAudioEngine {
       time,
       0.08,
     );
-    const targetGain = 0.028 + 0.05 * throttleFactor + 0.022 * speedFactor;
+    const targetGain =
+      0.024 + 0.045 * throttleFactor + 0.02 * speedFactor;
     this.engineGain.gain.setTargetAtTime(targetGain, time, 0.09);
   }
 
@@ -125,7 +126,7 @@ class VehicleAudioEngine {
     }
     const time = this.context.currentTime;
     this.skidGain.gain.setTargetAtTime(
-      Math.min(Math.max(amount, 0), 1) * 0.16,
+      Math.min(Math.max(amount, 0), 1) * 0.14,
       time,
       0.06,
     );
@@ -152,7 +153,7 @@ class VehicleAudioEngine {
     thump.frequency.setValueAtTime(130, time);
     thump.frequency.exponentialRampToValueAtTime(45, time + 0.18);
     const thumpGain = context.createGain();
-    thumpGain.gain.setValueAtTime(0.35 * intensity, time);
+    thumpGain.gain.setValueAtTime(0.32 * intensity, time);
     thumpGain.gain.exponentialRampToValueAtTime(0.001, time + 0.22);
     thump.connect(thumpGain).connect(this.master);
     thump.start(time);

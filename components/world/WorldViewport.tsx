@@ -304,14 +304,14 @@ export function WorldViewport() {
     if (experienceState === "escaped") {
       const id = requestAnimationFrame(() => {
         setSirenActive(false);
-        vehicleAudio.setSirenActive(false);
+        vehicleAudio.setSirenActive(false, 1.2);
       });
       return () => cancelAnimationFrame(id);
     }
     if (experienceState === "busted") {
       const timer = window.setTimeout(() => {
         setSirenActive(false);
-        vehicleAudio.setSirenActive(false);
+        vehicleAudio.setSirenActive(false, 1.0);
       }, 1600);
       return () => window.clearTimeout(timer);
     }
