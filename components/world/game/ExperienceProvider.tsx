@@ -366,15 +366,6 @@ export function ExperienceProvider({ children }: ExperienceProviderProps) {
     return () => cancelAnimationFrame(raf);
   }, [state, finishGame]);
 
-  useEffect(() => {
-    (globalThis as unknown as { __SF_EXP?: unknown }).__SF_EXP = {
-      state,
-      escape: escapeProgress,
-      bust: bustProgress,
-      result: result?.outcome ?? null,
-    };
-  }, [state, escapeProgress, bustProgress, result]);
-
   const gameplayActive =
     state === "countdown" ||
     state === "playing" ||
