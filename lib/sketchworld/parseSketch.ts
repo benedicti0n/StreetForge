@@ -381,6 +381,8 @@ export async function parseSketch(dataUrl: string): Promise<ParsedSketch> {
       "[streetforge] forge parse",
       JSON.stringify({
         road: roadPath.length >= 2 ? 1 : 0,
+        roadPoints: roadPath.length,
+        roadWidthCells: Math.round(roadWidthCells),
         trees: trees.length,
         ramps: ramps.length,
         buildings: buildings.length,
