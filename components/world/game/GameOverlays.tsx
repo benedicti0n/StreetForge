@@ -74,6 +74,20 @@ export function GameOverlays({ telemetryRef, chaseTelemetryRef }: GameOverlaysPr
       data-viewport-overlay
       className="pointer-events-none absolute inset-0 z-20 flex flex-col items-center justify-center"
     >
+      {state === "generating" && (
+        <div className="absolute bottom-6 flex items-center gap-2.5 rounded-full border border-accent/40 bg-panel/80 px-4 py-2 backdrop-blur-sm">
+          <span
+            aria-hidden
+            className={`h-1.5 w-1.5 rounded-full bg-accent ${
+              reduced ? "" : "animate-pulse"
+            }`}
+          />
+          <p className="text-[10px] font-semibold uppercase tracking-[0.3em] text-zinc-200">
+            Forging your world
+          </p>
+        </div>
+      )}
+
       {!experience.introDismissed && (
         <IntroOverlay
           onDismiss={experience.dismissIntro}

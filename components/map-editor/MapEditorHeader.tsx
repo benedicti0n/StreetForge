@@ -22,11 +22,11 @@ const STEP_LABELS: Record<
   { label: string; stepIndex: number }
 > = {
   editing: { label: "", stepIndex: -1 },
-  capturing: { label: "Preparing sketch", stepIndex: 0 },
-  submitting: { label: "Submitting world", stepIndex: 1 },
-  generating: { label: "Generating space", stepIndex: 2 },
-  fetchingWorld: { label: "Loading environment", stepIndex: 3 },
-  loadingWorld: { label: "Preparing physics", stepIndex: 4 },
+  capturing: { label: "Reading the sketch", stepIndex: 0 },
+  submitting: { label: "Starting generation", stepIndex: 1 },
+  generating: { label: "Building the environment", stepIndex: 2 },
+  fetchingWorld: { label: "Preparing collision", stepIndex: 3 },
+  loadingWorld: { label: "Finding safe ground", stepIndex: 4 },
   worldReady: { label: "World ready", stepIndex: 5 },
   error: { label: "Generation failed", stepIndex: -1 },
 };
@@ -178,7 +178,7 @@ export function MapEditorHeader({
           ) : (
             <>
               <p className="shrink-0 text-[11px] font-semibold uppercase tracking-[0.2em] text-accent">
-                Forging World
+                Forging your world
               </p>
               <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
                 {Object.entries(STEP_LABELS)
