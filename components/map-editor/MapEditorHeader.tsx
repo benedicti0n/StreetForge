@@ -13,7 +13,12 @@ import type {
   WorldKind,
 } from "@/components/world/generation/WorldPipeline";
 
-export type MapCaptureFeedback = "captured" | "error" | "ai-fallback" | null;
+export type MapCaptureFeedback =
+  | "captured"
+  | "error"
+  | "ai-fallback"
+  | "ai-map-invalid"
+  | null;
 
 interface MapEditorHeaderProps {
   editorReady: boolean;
@@ -286,10 +291,12 @@ export function MapEditorHeader({
               {feedback === "captured"
                 ? "Map captured"
                 : feedback === "ai-fallback"
-                  ? "AI failed - local interpretation"
-                  : feedback === "error"
-                    ? "Capture failed"
-                    : "\u00a0"}
+                  ? "AI request failed - using Local Forge"
+                  : feedback === "ai-map-invalid"
+                    ? "AI map invalid - using Local Forge"
+                    : feedback === "error"
+                      ? "Capture failed"
+                      : "\u00a0"}
             </span>
             <button
               type="button"

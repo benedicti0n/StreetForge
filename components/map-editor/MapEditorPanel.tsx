@@ -56,10 +56,12 @@ export function MapEditorPanel({ collapsed = false }: MapEditorPanelProps) {
       pipeline.forgeMode === "ai" &&
       pipeline.aiEnabled
     ) {
-      const world = await pipeline.beginForgeAi(dataUrl);
-      if (!world) {
+      const result = await pipeline.beginForgeAi(dataUrl);
+      if (!result.world) {
         // AI stage failed: fall back to the local interpretation.
-        setFeedback("ai-fallback");
+        setFeedback(
+          result.stage === "validate" ? "ai-map-invalid" : "ai-fallback",
+        );
         await pipeline.beginGeneration(dataUrl, pipeline.mode);
         return;
       }

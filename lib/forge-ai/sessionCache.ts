@@ -5,12 +5,19 @@
 
 const cache = new Map<string, string>();
 
+export const NORMALIZATION_PROMPT_VERSION = 1;
+
 export function hashSketch(dataUrl: string): string {
   let hash = 5381;
   for (let i = 0; i < dataUrl.length; i++) {
     hash = ((hash << 5) + hash + dataUrl.charCodeAt(i)) >>> 0;
   }
   return `v1-${hash.toString(36)}`;
+}
+
+/** Cache key includes the sketch hash, model and prompt version. */
+export function cacheKey(dataUrl: string, model: string): string {
+  return `${hashSketch(dataUrl)}-${model}-pv${NORMALIZATION_PROMPT_VERSION}`;
 }
 
 export function getCachedNormalized(hash: string): string | null {

@@ -14,9 +14,9 @@ import {
 import { quantizeSemanticMap } from "@/lib/forge-ai/quantizeSemanticMap";
 import { parseNormalizedMap } from "@/lib/forge-ai/parseNormalizedMap";
 import {
+  cacheKey,
   cacheNormalized,
   getCachedNormalized,
-  hashSketch,
 } from "@/lib/forge-ai/sessionCache";
 
 export type GenerationPhase =
@@ -56,12 +56,20 @@ interface WorldGenerationApi {
   ): Promise<Awaited<ReturnType<typeof buildProceduralWorld>> | null>;
   /**
    * AI-assisted path: normalizes the sketch via OpenAI, quantizes and
-   * parses the semantic map, then builds the world. Returns null when the
-   * AI stage fails (the caller falls back to local Forge).
+   * parses the semantic map, then builds the world. The returned stage
+   * tells the caller why the AI path failed (request vs semantic).
    */
   startAi(
     imageDataUrl: string,
-  ): Promise<Awaited<ReturnType<typeof buildProceduralWorld>> | null>;
+  ): Promise<{
+    world: Awaited<ReturnType<typeof buildProceduralWorld>> | null;
+    stage:
+      | "request"
+      | "decode"
+      | "quantize"
+      | "validate"
+      | "success";
+  }>;
   /** Marks an already-generated world as the active result (refetch path). */
   markWorldReady(world: WorldResult): void;
   reset(): void;
@@ -228,57 +236,87 @@ function loadImageElement(dataUrl: string): Promise<HTMLImageElement> {
   const startAi = useCallback(
     async (
       imageDataUrl: string,
-    ): Promise<Awaited<ReturnType<typeof buildProceduralWorld>> | null> => {
+    ): Promise<{
+      world: Awaited<ReturnType<typeof buildProceduralWorld>> | null;
+      stage: "request" | "decode" | "quantize" | "validate" | "success";
+    }> => {
       const token = generationTokenRef.current + 1;
       generationTokenRef.current = token;
       abortControllerRef.current?.abort();
       setResult(null);
       setState({ phase: "capturing", mode: "draft" });
+      const fail = (
+        stage: "request" | "decode" | "quantize" | "validate",
+      ): { world: null; stage: "request" | "decode" | "quantize" | "validate" } => {
+        if (generationTokenRef.current !== token) {
+          return { world: null, stage };
+        }
+        setResult(null);
+        setState({ phase: "editing", mode: "draft" });
+        return { world: null, stage };
+      };
       try {
-        let normalized = getCachedNormalized(hashSketch(imageDataUrl));
+        const model = "gpt-image-2";
+        const key = cacheKey(imageDataUrl, model);
+        let normalized = getCachedNormalized(key);
         if (!normalized) {
           setState({ phase: "submitting", mode: "draft" });
           const controller = new AbortController();
           abortControllerRef.current = controller;
-          const response = await fetch("/api/forge/normalize", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ image: imageDataUrl }),
-            cache: "no-store",
-            signal: controller.signal,
-          });
+          let response: Response;
+          try {
+            response = await fetch("/api/forge/normalize", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ image: imageDataUrl }),
+              cache: "no-store",
+              signal: controller.signal,
+            });
+          } catch {
+            return fail("request");
+          }
           const body = (await response.json()) as {
             image?: string;
             error?: { code?: string; message?: string };
           };
           if (!response.ok || !body.image) {
-            throw new Error(body.error?.message ?? "AI normalization failed.");
+            return fail("request");
           }
           normalized = body.image;
-          cacheNormalized(hashSketch(imageDataUrl), normalized);
+          cacheNormalized(key, normalized);
         }
         if (generationTokenRef.current !== token) {
-          return null;
+          return { world: null, stage: "request" };
         }
 
         setState({ phase: "generating", progress: 60, mode: "draft" });
-        const image = await loadImageElement(normalized);
-        const quantized = await quantizeSemanticMap(image);
-        const layout = parseNormalizedMap(quantized.classes, quantized.grid);
+        let image: HTMLImageElement;
+        try {
+          image = await loadImageElement(normalized);
+        } catch {
+          return fail("decode");
+        }
+        let quantized: Awaited<ReturnType<typeof quantizeSemanticMap>>;
+        try {
+          quantized = await quantizeSemanticMap(image);
+        } catch {
+          return fail("quantize");
+        }
+        let layout: Awaited<ReturnType<typeof parseNormalizedMap>>;
+        try {
+          layout = parseNormalizedMap(quantized.classes, quantized.grid);
+        } catch {
+          return fail("validate");
+        }
         const world = await buildProceduralWorldFromNormalized(layout);
         if (generationTokenRef.current !== token) {
-          return null;
+          return { world: null, stage: "request" };
         }
         setResult(world);
         setState({ phase: "worldReady", progress: 100, mode: "draft" });
-        return world;
+        return { world, stage: "success" };
       } catch {
-        if (generationTokenRef.current !== token) {
-          return null;
-        }
-        setResult(null);
-        setState({ phase: "editing", mode: "draft" });
-        return null;
+        return fail("request");
       }
     },
     [],

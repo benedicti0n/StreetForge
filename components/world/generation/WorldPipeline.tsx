@@ -33,7 +33,7 @@ interface WorldPipelineValue {
   /** AI-assisted forge: normalize via OpenAI, then build the world. */
   beginForgeAi: (
     imageDataUrl: string,
-  ) => Promise<WorldDescriptor | null>;
+  ) => Promise<{ world: WorldDescriptor | null; stage: string }>;
   resetGeneration: () => void;
   /** Refetches fresh metadata for the current world (signed URL recovery). */
   refreshGeneratedWorld: () => Promise<boolean>;
@@ -64,12 +64,11 @@ export function WorldPipelineProvider({ children }: { children: ReactNode }) {
   const beginForgeAi = useCallback(
     async (imageDataUrl: string) => {
       setWorldKind("forge");
-      const world = await generation.startAi(imageDataUrl);
-      if (world) {
-        setGeneratedWorld(world);
-        return world;
+      const result = await generation.startAi(imageDataUrl);
+      if (result.world) {
+        setGeneratedWorld(result.world);
       }
-      return null;
+      return result;
     },
     [generation],
   );
