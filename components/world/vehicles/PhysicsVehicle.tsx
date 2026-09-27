@@ -68,6 +68,8 @@ interface WheelVisualSetup {
 const _spinQuaternion = new Quaternion();
 const _baseQuaternion = new Quaternion();
 const _xAxis = new Vector3(1, 0, 0);
+const _rightVector = new Vector3();
+const _telemetryQuaternion = new Quaternion();
 
 export const PhysicsVehicle = forwardRef<
   PhysicsVehicleHandle,
@@ -284,12 +286,28 @@ export const PhysicsVehicle = forwardRef<
     }
     const control = controls.current;
     const linvel = body.linvel();
+    const rotation = body.rotation();
+    _rightVector
+      .set(1, 0, 0)
+      .applyQuaternion(
+        _telemetryQuaternion.set(
+          rotation.x,
+          rotation.y,
+          rotation.z,
+          rotation.w,
+        ),
+      );
+    const lateralSlip = Math.abs(
+      linvel.x * _rightVector.x +
+        linvel.y * _rightVector.y +
+        linvel.z * _rightVector.z,
+    );
     const telemetry: VehicleTelemetry = {
       speedKmh: Math.abs(controller.currentVehicleSpeed()) * 3.6,
       steering: control.steering,
       throttle: control.throttle,
       handbrake: control.handbrake,
-      lateralSlip: Math.abs(linvel.x) + Math.abs(linvel.z),
+      lateralSlip,
     };
     onTelemetry?.(telemetry);
     if (telemetryRef) {
