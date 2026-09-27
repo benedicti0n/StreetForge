@@ -14,8 +14,6 @@ import type { ProceduralWorldDescriptor } from "@/lib/sketchworld/buildWorld";
 import {
   buildBox,
   buildDashPlacements,
-  buildEdgeWalls,
-  buildRoadRibbon,
   buildRoadRibbonWithShoulder,
   buildTreeGeometry,
   buildWedge,
@@ -37,33 +35,20 @@ const DASH_MATERIAL = new MeshStandardMaterial({
   roughness: 0.9,
 });
 const RAMP_MATERIAL = new MeshStandardMaterial({
-  color: "#3c3c42",
-  roughness: 0.9,
-});
-const RAMP_EDGE_MATERIAL = new MeshStandardMaterial({
   color: "#e0a82e",
-  roughness: 0.7,
+  roughness: 0.85,
 });
 const RAMP_SUPPORT_MATERIAL = new MeshStandardMaterial({
   color: "#3a3833",
   roughness: 0.95,
 });
 const BUILDING_MATERIAL = new MeshStandardMaterial({
-  color: "#9aa3ae",
+  color: "#67707c",
   roughness: 0.9,
 });
 const BUILDING_ROOF_MATERIAL = new MeshStandardMaterial({
   color: "#7d8794",
   roughness: 0.85,
-});
-const BUILDING_WINDOW_MATERIAL = new MeshStandardMaterial({
-  color: "#39424d",
-  roughness: 0.7,
-});
-const WATER_MATERIAL = new MeshStandardMaterial({
-  color: "#2f7fd0",
-  roughness: 0.25,
-  metalness: 0.1,
 });
 const WALL_MATERIAL = new MeshStandardMaterial({
   color: "#41424a",
@@ -97,7 +82,7 @@ export function ProceduralWorld({
   descriptor,
   onReady,
 }: ProceduralWorldProps) {
-  const { road, ramps, buildings, water, vegetation } = descriptor;
+  const { road, ramps, buildings, trees } = descriptor;
 
   const roadGeometry = useMemo(
     () =>
@@ -147,26 +132,13 @@ export function ProceduralWorld({
   // slightly different canopy colours, plus a per-tree rotation.
   const treeVariants = useMemo(
     () =>
-      vegetation.map((_, index) => ({
+      trees.map((_, index) => ({
         canopyScale: index % 3 === 0 ? 1.15 : index % 3 === 1 ? 0.85 : 1,
         useLightCanopy: index % 4 === 2,
         yaw: (index * 0.9) % (Math.PI * 2),
       })),
-    [vegetation],
+    [trees],
   );
-
-  const waterGeometry = useMemo(() => {
-    if (!water) {
-      return null;
-    }
-    return buildRoadRibbon(water.points, water.width, -0.12);
-  }, [water]);
-  const waterWallsGeometry = useMemo(() => {
-    if (!water) {
-      return null;
-    }
-    return buildEdgeWalls(water.points, water.width + 0.4, 0.9);
-  }, [water]);
 
   const wallGeometries = useMemo(
     () =>
@@ -193,13 +165,6 @@ export function ProceduralWorld({
     () =>
       buildings.map((building) =>
         buildBox(building.size[0] + 0.8, 0.6, building.size[2] + 0.8),
-      ),
-    [buildings],
-  );
-  const windowGeometries = useMemo(
-    () =>
-      buildings.map((building) =>
-        buildBox(building.size[0] + 0.05, 0.8, building.size[2] + 0.05),
       ),
     [buildings],
   );
@@ -315,28 +280,15 @@ export function ProceduralWorld({
             friction={0.8}
           />
         ))}
-        {/* Vegetation trunk colliders (sparse: only every third prop) */}
-        {vegetation.map((tree, index) =>
-          index % 3 === 0 ? (
-            <CuboidCollider
-              key={`tree-${index}`}
-              args={[0.45 * tree.scale, 1.2 * tree.scale, 0.45 * tree.scale]}
-              position={[tree.position[0], 1.2 * tree.scale, tree.position[2]]}
-              friction={0.8}
-            />
-          ) : null,
-        )}
-        {/* Water boundary walls */}
-        {waterWallsGeometry && (
-          <AnyCollider
-            shape="trimesh"
-            args={[
-              waterWallsGeometry.attributes.position.array,
-              waterWallsGeometry.getIndex()?.array ?? [],
-            ]}
-            friction={0.6}
+        {/* Trees */}
+        {trees.map((tree, index) => (
+          <CuboidCollider
+            key={`tree-${index}`}
+            args={[0.45 * tree.scale, 1.2 * tree.scale, 0.45 * tree.scale]}
+            position={[tree.position[0], 1.2 * tree.scale, tree.position[2]]}
+            friction={0.8}
           />
-        )}
+        ))}
       </RigidBody>
 
       {/* Terrain visual */}
@@ -347,9 +299,6 @@ export function ProceduralWorld({
       {/* Center dashes */}
       {dashInstances && <primitive object={dashInstances} />}
 
-      {/* Water */}
-      {waterGeometry && <mesh geometry={waterGeometry} material={WATER_MATERIAL} />}
-
       {/* Ramps */}
       {ramps.map((ramp, index) => (
         <group key={`ramp-${index}`} position={ramp.position} rotation={[0, ramp.yaw, 0]}>
@@ -358,12 +307,6 @@ export function ProceduralWorld({
             material={RAMP_MATERIAL}
             castShadow
             receiveShadow
-          />
-          <mesh
-            geometry={buildBox(9.2, 0.5, 0.6)}
-            material={RAMP_EDGE_MATERIAL}
-            position={[0, 0.25, -5.2]}
-            castShadow
           />
           <mesh
             geometry={buildBox(9.6, 0.35, 5)}
@@ -420,20 +363,11 @@ export function ProceduralWorld({
             ]}
             castShadow
           />
-          <mesh
-            geometry={windowGeometries[index]}
-            material={BUILDING_WINDOW_MATERIAL}
-            position={[
-              building.position[0],
-              Math.max(1.4, building.size[1] * 0.45),
-              building.position[2],
-            ]}
-          />
         </group>
       ))}
 
-      {/* Vegetation */}
-      {vegetation.map((tree, index) => {
+      {/* Trees */}
+      {trees.map((tree, index) => {
         const variant = treeVariants[index];
         return (
           <group

@@ -26,21 +26,6 @@ interface MapEditorHeaderProps {
 
 const RESET_CONFIRM_TIMEOUT_MS = 3000;
 
-function LegendSwatch({ color, label }: { color: string; label: string }) {
-  return (
-    <span className="inline-flex items-center gap-1.5">
-      <span
-        aria-hidden
-        className="h-2.5 w-2.5 rounded-sm border border-black/40"
-        style={{ backgroundColor: color }}
-      />
-      <span className="text-[10px] font-medium uppercase tracking-[0.12em] text-zinc-400">
-        {label}
-      </span>
-    </span>
-  );
-}
-
 const STEP_LABELS: Record<
   WorldGenerationState["phase"],
   { label: string; stepIndex: number }
@@ -119,15 +104,6 @@ export function MapEditorHeader({
             Draw it. Drive it. Escape it. Forge your sketch into a playable
             world.
           </p>
-          <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1">
-            <LegendSwatch color="#1c1c1f" label="Roads" />
-            <LegendSwatch color="#8a909a" label="Buildings" />
-            <LegendSwatch color="#2f7fd0" label="Water" />
-            <LegendSwatch color="#3e8e3f" label="Vegetation" />
-            <span className="text-[10px] text-zinc-500">
-              Dark shapes can become ramps.
-            </span>
-          </div>
         </div>
         <div className="flex shrink-0 items-center gap-3">
           {generation.phase === "editing" && (
