@@ -7,9 +7,9 @@ class VehicleAudioEngine {
   private context: AudioContext | null = null;
   private master: GainNode | null = null;
 
-  private engineOscA: OscillatorNode | null = null;
-  private engineOscB: OscillatorNode | null = null;
-  private engineFilter: BiquadFilterNode | null = null;
+  private engineSource: AudioBufferSourceNode | null = null;
+  private engineBuffer: AudioBuffer | null = null;
+  private engineLoadState: "idle" | "loading" | "loaded" | "failed" = "idle";
   private engineGain: GainNode | null = null;
 
   private skidSource: AudioBufferSourceNode | null = null;
@@ -60,6 +60,7 @@ class VehicleAudioEngine {
     this.buildSkid();
     this.buildSiren();
     this.loadSirenBuffer();
+    this.loadEngineBuffer();
   }
 
   setMuted(muted: boolean): void {
@@ -165,35 +166,26 @@ class VehicleAudioEngine {
     return this.sirenActive;
   }
 
-  /** speedKmh and throttle (-1..1) drive the race engine voice. */
+  /** speedKmh and throttle (-1..1) drive the engine sample. */
   updateEngine(speedKmh: number, throttle: number): void {
-    if (
-      !this.context ||
-      !this.engineOscA ||
-      !this.engineOscB ||
-      !this.engineFilter ||
-      !this.engineGain
-    ) {
+    if (!this.context || !this.engineSource || !this.engineGain) {
       return;
     }
     const time = this.context.currentTime;
     const speedFactor = Math.min(Math.abs(speedKmh) / 165, 1);
     const throttleFactor = Math.max(0, throttle);
-    const rpm = Math.min(
-      1.15,
-      0.3 + 0.55 * speedFactor + 0.3 * throttleFactor,
-    );
-    const freqA = 45 + rpm * 105;
-    this.engineOscA.frequency.setTargetAtTime(freqA, time, 0.06);
-    this.engineOscB.frequency.setTargetAtTime(freqA / 2, time, 0.06);
-    this.engineFilter.frequency?.setTargetAtTime(
-      350 + rpm * 1400,
-      time,
-      0.08,
-    );
+    // Idle / parked: near-silent. Driving: audible presence that grows with
+    // speed and throttle. The clip loops; only gain/rate are animated.
     const targetGain =
-      0.024 + 0.045 * throttleFactor + 0.02 * speedFactor;
+      speedFactor < 0.01 && throttleFactor < 0.05
+        ? 0.006
+        : 0.055 + 0.05 * speedFactor + 0.045 * throttleFactor;
     this.engineGain.gain.setTargetAtTime(targetGain, time, 0.09);
+    this.engineSource.playbackRate.setTargetAtTime(
+      0.85 + 0.3 * speedFactor + 0.15 * throttleFactor,
+      time,
+      0.12,
+    );
   }
 
   /** amount 0..1 drives the tire-skid noise. */
@@ -242,8 +234,10 @@ class VehicleAudioEngine {
       void this.context.close();
       this.context = null;
       this.master = null;
-      this.engineOscA = this.engineOscB = this.engineFilter = this.engineGain =
-        null;
+      this.engineSource = null;
+      this.engineBuffer = null;
+      this.engineLoadState = "idle";
+      this.engineGain = null;
       this.skidSource = this.skidFilter = this.skidGain = null;
       this.sirenOscA = this.sirenOscB = this.sirenLfo = this.sirenGain =
         this.sirenLfoGain = null;
@@ -262,27 +256,37 @@ class VehicleAudioEngine {
     }
     const gain = context.createGain();
     gain.gain.value = 0;
-    const filter = context.createBiquadFilter();
-    filter.type = "lowpass";
-    filter.frequency.value = 500;
-    filter.Q.value = 1.2;
-    const oscA = context.createOscillator();
-    oscA.type = "sawtooth";
-    oscA.frequency.value = 60;
-    const oscB = context.createOscillator();
-    oscB.type = "square";
-    oscB.frequency.value = 30;
-    const subGain = context.createGain();
-    subGain.gain.value = 0.5;
-    oscA.connect(filter);
-    oscB.connect(subGain).connect(filter);
-    filter.connect(gain).connect(this.master ?? context.destination);
-    oscA.start();
-    oscB.start();
-    this.engineOscA = oscA;
-    this.engineOscB = oscB;
-    this.engineFilter = filter;
+    gain.connect(this.master ?? context.destination);
     this.engineGain = gain;
+  }
+
+  private async loadEngineBuffer(): Promise<void> {
+    if (this.engineLoadState !== "idle" || !this.context) {
+      return;
+    }
+    this.engineLoadState = "loading";
+    try {
+      const response = await fetch("/audio/engine.mp3");
+      if (!response.ok) {
+        throw new Error(`engine fetch failed: ${response.status}`);
+      }
+      const arrayBuffer = await response.arrayBuffer();
+      this.engineBuffer = await this.context.decodeAudioData(arrayBuffer);
+      const source = this.context.createBufferSource();
+      source.buffer = this.engineBuffer;
+      source.loop = true;
+      const gain = this.engineGain;
+      if (gain) {
+        source.connect(gain);
+        source.start();
+        this.engineSource = source;
+      }
+      this.engineLoadState = "loaded";
+    } catch {
+      this.engineLoadState = "failed";
+      this.engineSource = null;
+      this.engineBuffer = null;
+    }
   }
 
   private buildSkid(): void {
