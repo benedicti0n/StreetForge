@@ -132,6 +132,7 @@ export function WorldViewport() {
 
   const loadingWorld =
     pipeline.generatedWorld !== null &&
+    pipeline.generatedWorld.kind !== "procedural" &&
     activeWorldError === null &&
     !(
       splatState.worldId === pipeline.generatedWorld.worldId &&
@@ -146,9 +147,10 @@ export function WorldViewport() {
 
   const worldReadyForGenerated =
     pipeline.generatedWorld !== null &&
-    splatState.worldId === pipeline.generatedWorld.worldId &&
-    splatState.ready &&
-    colliderInfo?.worldId === pipeline.generatedWorld.worldId;
+    colliderInfo?.worldId === pipeline.generatedWorld.worldId &&
+    (pipeline.generatedWorld.kind === "procedural" ||
+      (splatState.worldId === pipeline.generatedWorld.worldId &&
+        splatState.ready));
 
   // Report asset readiness to the experience state machine.
   useEffect(() => {
@@ -159,6 +161,9 @@ export function WorldViewport() {
 
   useEffect(() => {
     if (!pipeline.generatedWorld) {
+      return;
+    }
+    if (pipeline.generatedWorld.kind === "procedural") {
       return;
     }
     if (worldReadyForGenerated) {
@@ -177,6 +182,9 @@ export function WorldViewport() {
   // world metadata once (same world id, zero new generations) and retry.
   useEffect(() => {
     if (!worldLoadError || !pipeline.generatedWorld) {
+      return;
+    }
+    if (pipeline.generatedWorld.kind === "procedural") {
       return;
     }
     if (worldLoadError.worldId !== pipeline.generatedWorld.worldId) {

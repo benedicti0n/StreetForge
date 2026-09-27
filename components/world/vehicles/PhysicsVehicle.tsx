@@ -47,7 +47,7 @@ interface PhysicsVehicleProps {
   isPlayer?: boolean;
   autoResetBelowY?: number;
   autoResetHalfExtent?: number;
-  spawnOverride?: [number, number, number];
+  spawnOverride?: { position: [number, number, number]; yaw: number };
   bodyRef?: RefObject<RapierRigidBody | null>;
   onLoad?: () => void;
   onTelemetry?: (telemetry: VehicleTelemetry) => void;
@@ -165,11 +165,22 @@ export const PhysicsVehicle = forwardRef<
     if (!body) {
       return;
     }
-    const spawn = spawnOverride ?? definition.worldPosition;
+    const spawn = spawnOverride ?? {
+      position: definition.worldPosition,
+      yaw: 0,
+    };
     const rotation = definition.visualRotation;
-    body.setTranslation({ x: spawn[0], y: spawn[1], z: spawn[2] }, true);
+    body.setTranslation(
+      { x: spawn.position[0], y: spawn.position[1], z: spawn.position[2] },
+      true,
+    );
     body.setRotation(
-      { x: rotation[0], y: rotation[1], z: rotation[2], w: 1 },
+      {
+        x: rotation[0],
+        y: rotation[1] + spawn.yaw,
+        z: rotation[2],
+        w: 1,
+      },
       true,
     );
     body.setLinvel({ x: 0, y: 0, z: 0 }, true);

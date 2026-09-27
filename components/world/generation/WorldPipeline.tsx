@@ -10,12 +10,18 @@ import {
   type ReactNode,
 } from "react";
 import type { GeneratedWorldDescriptor } from "@/lib/worldlabs/types";
+import { buildProceduralWorld } from "@/lib/sketchworld/buildWorld";
 import {
   useWorldGeneration,
   type GenerationMode,
 } from "./useWorldGeneration";
 
 export type WorldMode = "sandbox" | "generated";
+export type WorldKind = "forge" | "marble";
+
+export type WorldDescriptor =
+  | GeneratedWorldDescriptor
+  | Awaited<ReturnType<typeof buildProceduralWorld>>;
 
 interface WorldPipelineValue {
   generationState: ReturnType<typeof useWorldGeneration>["state"];
@@ -28,7 +34,9 @@ interface WorldPipelineValue {
   refreshGeneratedWorld: () => Promise<boolean>;
   mode: GenerationMode;
   setMode: (mode: GenerationMode) => void;
-  generatedWorld: GeneratedWorldDescriptor | null;
+  worldKind: WorldKind;
+  setWorldKind: (kind: WorldKind) => void;
+  generatedWorld: WorldDescriptor | null;
   worldMode: WorldMode;
   setWorldMode: (mode: WorldMode) => void;
 }
@@ -38,19 +46,23 @@ const WorldPipelineContext = createContext<WorldPipelineValue | null>(null);
 export function WorldPipelineProvider({ children }: { children: ReactNode }) {
   const generation = useWorldGeneration();
   const [mode, setMode] = useState<GenerationMode>("draft");
+  const [worldKind, setWorldKind] = useState<WorldKind>("forge");
   const [worldMode, setWorldMode] = useState<WorldMode>("sandbox");
   const [generatedWorld, setGeneratedWorld] =
-    useState<GeneratedWorldDescriptor | null>(null);
+    useState<WorldDescriptor | null>(null);
 
   const beginGeneration = useCallback(
     async (imageDataUrl: string, requestedMode: GenerationMode) => {
       setMode(requestedMode);
-      const world = await generation.start(imageDataUrl, requestedMode);
+      const world =
+        worldKind === "forge"
+          ? await generation.startLocal(imageDataUrl)
+          : await generation.start(imageDataUrl, requestedMode);
       if (world) {
         setGeneratedWorld(world);
       }
     },
-    [generation],
+    [generation, worldKind],
   );
 
   const refreshGeneratedWorld = useCallback(async () => {
@@ -116,6 +128,8 @@ export function WorldPipelineProvider({ children }: { children: ReactNode }) {
       refreshGeneratedWorld,
       mode,
       setMode,
+      worldKind,
+      setWorldKind,
       generatedWorld,
       worldMode,
       setWorldMode,
@@ -126,6 +140,7 @@ export function WorldPipelineProvider({ children }: { children: ReactNode }) {
       beginGeneration,
       refreshGeneratedWorld,
       mode,
+      worldKind,
       generatedWorld,
       worldMode,
     ],

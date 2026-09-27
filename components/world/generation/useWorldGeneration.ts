@@ -6,6 +6,8 @@ import type {
   WorldOperationStatus,
 } from "@/lib/worldlabs/types";
 import { WORLD_LABS } from "@/lib/worldlabs/client-shared";
+import { parseSketch } from "@/lib/sketchworld/parseSketch";
+import { buildProceduralWorld } from "@/lib/sketchworld/buildWorld";
 
 export type GenerationPhase =
   | "editing"
@@ -26,16 +28,24 @@ export interface WorldGenerationState {
   mode: GenerationMode;
 }
 
+type WorldResult =
+  | GeneratedWorldDescriptor
+  | Awaited<ReturnType<typeof buildProceduralWorld>>;
+
 interface WorldGenerationApi {
   state: WorldGenerationState;
-  result: GeneratedWorldDescriptor | null;
+  result: WorldResult | null;
   /** Resolves with the generated world descriptor, or null on failure/supersession. */
   start(
     imageDataUrl: string,
     mode: GenerationMode,
   ): Promise<GeneratedWorldDescriptor | null>;
+  /** Builds a local procedural world from the sketch - no network calls. */
+  startLocal(
+    imageDataUrl: string,
+  ): Promise<Awaited<ReturnType<typeof buildProceduralWorld>> | null>;
   /** Marks an already-generated world as the active result (refetch path). */
-  markWorldReady(world: GeneratedWorldDescriptor): void;
+  markWorldReady(world: WorldResult): void;
   reset(): void;
 }
 
@@ -90,7 +100,7 @@ export function useWorldGeneration(): WorldGenerationApi {
   });
   const generationTokenRef = useRef(0);
   const abortControllerRef = useRef<AbortController | null>(null);
-  const [result, setResult] = useState<GeneratedWorldDescriptor | null>(null);
+  const [result, setResult] = useState<WorldResult | null>(null);
 
   useEffect(() => {
     return () => {
@@ -177,7 +187,7 @@ export function useWorldGeneration(): WorldGenerationApi {
     [],
   );
 
-  const markWorldReady = useCallback((world: GeneratedWorldDescriptor) => {
+  const markWorldReady = useCallback((world: WorldResult) => {
     generationTokenRef.current += 1;
     abortControllerRef.current?.abort();
     setResult(world);
@@ -188,6 +198,49 @@ export function useWorldGeneration(): WorldGenerationApi {
     }));
   }, []);
 
+  const startLocal = useCallback(
+    async (
+      imageDataUrl: string,
+    ): Promise<Awaited<ReturnType<typeof buildProceduralWorld>> | null> => {
+      const token = generationTokenRef.current + 1;
+      generationTokenRef.current = token;
+      abortControllerRef.current?.abort();
+      const controller = new AbortController();
+      abortControllerRef.current = controller;
+      setResult(null);
+
+      setState({ phase: "capturing", mode: "draft" });
+      try {
+        // Reading the sketch (the real parse work).
+        const parsed = await parseSketch(imageDataUrl);
+        if (generationTokenRef.current !== token) return null;
+
+        setState({ phase: "submitting", mode: "draft" });
+        // Give the UI a brief, honest "forging" beat while the world is
+        // assembled from the parsed layout.
+        await new Promise((resolve) => setTimeout(resolve, 420));
+        if (generationTokenRef.current !== token) return null;
+
+        setState({ phase: "generating", progress: 85, mode: "draft" });
+        const world = await buildProceduralWorld(imageDataUrl, parsed);
+        if (generationTokenRef.current !== token) return null;
+
+        setResult(world);
+        setState({ phase: "worldReady", progress: 100, mode: "draft" });
+        return world;
+      } catch {
+        if (generationTokenRef.current !== token) return null;
+        setState((prev) => ({
+          ...prev,
+          phase: "error",
+          error: "We couldn't forge this world. Your current world is still safe.",
+        }));
+        return null;
+      }
+    },
+    [],
+  );
+
   const reset = useCallback(() => {
     generationTokenRef.current += 1;
     abortControllerRef.current?.abort();
@@ -195,5 +248,5 @@ export function useWorldGeneration(): WorldGenerationApi {
     setState({ phase: "editing", mode: "draft" });
   }, []);
 
-  return { state, result, start, markWorldReady, reset };
+  return { state, result, start, startLocal, markWorldReady, reset };
 }

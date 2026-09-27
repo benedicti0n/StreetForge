@@ -34,6 +34,7 @@ export interface WorldLabsWorld {
 }
 
 export interface GeneratedWorldDescriptor {
+  kind?: "marble";
   worldId: string;
   splats: {
     low?: string;

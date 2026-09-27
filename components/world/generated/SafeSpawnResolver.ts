@@ -8,9 +8,15 @@ import {
   Vector3,
 } from "three";
 
+export interface SpawnPoint {
+  position: [number, number, number];
+  /** World-space yaw (radians) the vehicle should face. */
+  yaw: number;
+}
+
 export interface SafeSpawnResult {
-  player: { position: [number, number, number] };
-  police: { position: [number, number, number] };
+  player: SpawnPoint;
+  police: SpawnPoint;
 }
 
 export interface SpawnCandidate {
@@ -129,9 +135,11 @@ export function findSafeSpawn(
   return {
     player: {
       position: [playerX, playerY + PLAYER_CLEARANCE, playerZ],
+      yaw: 0,
     },
     police: {
       position: [policeX, policeY + POLICE_CLEARANCE, policeZ],
+      yaw: 0,
     },
   };
 }

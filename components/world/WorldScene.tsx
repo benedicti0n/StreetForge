@@ -10,9 +10,9 @@ import {
 } from "react";
 import { PhysicsVehicle, type PhysicsVehicleHandle } from "./vehicles/PhysicsVehicle";
 import { GeneratedWorld } from "./generated/GeneratedWorld";
+import { ProceduralWorld } from "./procedural/ProceduralWorld";
 import type { SafeSpawnResult } from "./generated/SafeSpawnResolver";
-import type { GeneratedWorldDescriptor } from "@/lib/worldlabs/types";
-import type { WorldMode } from "./generation/WorldPipeline";
+import type { WorldDescriptor, WorldMode } from "./generation/WorldPipeline";
 import { type VehicleId } from "./vehicles/vehicleDefinitions";
 import {
   type VehicleControlRef,
@@ -77,7 +77,7 @@ interface WorldSceneProps {
   chaseTelemetryRef?: RefObject<ChaseTelemetry | null>;
   followCameraActive?: boolean;
   chaseActive?: boolean;
-  generatedWorld?: GeneratedWorldDescriptor | null;
+  generatedWorld?: WorldDescriptor | null;
   colliderDebug?: boolean;
   worldMode?: WorldMode;
   generatedSpawns?: SafeSpawnResult | null;
@@ -115,9 +115,13 @@ export function WorldScene({
   onVehicleLoaded,
   onVehicleLoadFailed,
 }: WorldSceneProps) {
+  const proceduralWorld = generatedWorld?.kind === "procedural";
   return (
     <>
-      <color attach="background" args={["#101013"]} />
+      <color attach="background" args={[proceduralWorld ? "#8fc2ea" : "#101013"]} />
+      {proceduralWorld ? (
+        <fog attach="fog" args={["#cfe4f5", 130, 240]} />
+      ) : null}
       <SparkWorldRenderer />
       <WorldCameraControls controlsRef={controlsRef} enabled={!followCameraActive} />
       <VehicleFollowCamera
@@ -125,18 +129,22 @@ export function WorldScene({
         telemetryRef={playerTelemetryRef}
         active={followCameraActive}
       />
-      <hemisphereLight args={["#c9ced6", "#17171a", 1.1]} />
+      {proceduralWorld ? (
+        <hemisphereLight args={["#ffffff", "#93bd6f", 1.15]} />
+      ) : (
+        <hemisphereLight args={["#c9ced6", "#17171a", 1.1]} />
+      )}
       <directionalLight
-        position={[20, 30, 10]}
-        intensity={2.5}
+        position={[proceduralWorld ? 60 : 20, proceduralWorld ? 80 : 30, proceduralWorld ? 30 : 10]}
+        intensity={proceduralWorld ? 1.9 : 2.5}
         castShadow
         shadow-mapSize={[2048, 2048]}
-        shadow-camera-left={-30}
-        shadow-camera-right={30}
-        shadow-camera-top={30}
-        shadow-camera-bottom={-30}
+        shadow-camera-left={proceduralWorld ? -110 : -30}
+        shadow-camera-right={proceduralWorld ? 110 : 30}
+        shadow-camera-top={proceduralWorld ? 110 : 30}
+        shadow-camera-bottom={proceduralWorld ? -110 : -30}
         shadow-camera-near={1}
-        shadow-camera-far={80}
+        shadow-camera-far={proceduralWorld ? 260 : 80}
         shadow-bias={-0.0005}
       />
       {worldMode === "sandbox" && (
@@ -163,7 +171,13 @@ export function WorldScene({
         followCamera={false}
       />}
       <PhysicsWorld hasGround={worldMode === "sandbox"}>
-        {generatedWorld && (
+        {generatedWorld && generatedWorld.kind === "procedural" ? (
+          <ProceduralWorld
+            key={generatedWorld.worldId}
+            descriptor={generatedWorld}
+            onReady={onColliderReady}
+          />
+        ) : generatedWorld ? (
           <GeneratedWorld
             key={worldAssetKey || generatedWorld.worldId}
             descriptor={generatedWorld}
@@ -172,7 +186,7 @@ export function WorldScene({
             onColliderReady={onColliderReady}
             onColliderError={onColliderError}
           />
-        )}
+        ) : null}
         <PoliceChaseController
           active={chaseActive}
           playerBodyRef={playerBodyRef}
@@ -199,8 +213,8 @@ export function WorldScene({
                 spawnOverride={
                   generatedSpawns
                     ? id === "race"
-                      ? generatedSpawns.player.position
-                      : generatedSpawns.police.position
+                      ? generatedSpawns.player
+                      : generatedSpawns.police
                     : undefined
                 }
                 bodyRef={

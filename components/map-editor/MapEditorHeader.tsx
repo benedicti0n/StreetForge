@@ -8,6 +8,7 @@ import {
   type SplatQuality,
 } from "@/lib/worldlabs/splatQuality";
 import { useExperience } from "@/components/world/game/ExperienceProvider";
+import type { WorldKind } from "@/components/world/generation/WorldPipeline";
 
 export type MapCaptureFeedback = "captured" | "error" | null;
 
@@ -16,6 +17,8 @@ interface MapEditorHeaderProps {
   feedback: MapCaptureFeedback;
   generation: WorldGenerationState;
   generationActive: boolean;
+  worldKind: WorldKind;
+  onWorldKindChange: (kind: WorldKind) => void;
   onModeChange: (mode: GenerationMode) => void;
   onReset: () => void;
   onBuildWorld: () => void;
@@ -42,6 +45,8 @@ export function MapEditorHeader({
   feedback,
   generation,
   generationActive,
+  worldKind,
+  onWorldKindChange,
   onModeChange,
   onReset,
   onBuildWorld,
@@ -96,8 +101,8 @@ export function MapEditorHeader({
             World Sketch
           </h1>
           <p className="truncate text-[11px] text-zinc-500">
-            Draw it. Drive it. Escape it. Sketch roads, terrain, ramps and
-            landmarks &mdash; StreetForge will interpret your layout.
+            Draw it. Drive it. Escape it. Forge your sketch into a playable
+            world.
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-3">
@@ -141,6 +146,39 @@ export function MapEditorHeader({
             </div>
           )}
           {generation.phase === "editing" && (
+            <div
+              role="group"
+              aria-label="World type"
+              title="Forge builds a flat stylized world locally from your sketch. Marble is an experimental AI world model."
+              className="flex items-center rounded-md border border-edge bg-background p-0.5"
+            >
+              <button
+                type="button"
+                onClick={() => onWorldKindChange("forge")}
+                aria-pressed={worldKind === "forge"}
+                className={`rounded px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.15em] transition-colors focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent ${
+                  worldKind === "forge"
+                    ? "bg-panel-raised text-zinc-100"
+                    : "text-zinc-500 hover:text-zinc-300"
+                }`}
+              >
+                Forge
+              </button>
+              <button
+                type="button"
+                onClick={() => onWorldKindChange("marble")}
+                aria-pressed={worldKind === "marble"}
+                className={`rounded px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.15em] transition-colors focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent ${
+                  worldKind === "marble"
+                    ? "bg-panel-raised text-zinc-100"
+                    : "text-zinc-500 hover:text-zinc-300"
+                }`}
+              >
+                Marble
+              </button>
+            </div>
+          )}
+          {generation.phase === "editing" && worldKind === "marble" && (
             <div
               role="group"
               aria-label="World generation quality"

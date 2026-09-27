@@ -49,10 +49,13 @@ function useReducedMotion(): boolean {
   const [reduced, setReduced] = useState(false);
   useEffect(() => {
     const query = window.matchMedia("(prefers-reduced-motion: reduce)");
-    setReduced(query.matches);
+    const rafId = requestAnimationFrame(() => setReduced(query.matches));
     const onChange = (event: MediaQueryListEvent) => setReduced(event.matches);
     query.addEventListener("change", onChange);
-    return () => query.removeEventListener("change", onChange);
+    return () => {
+      cancelAnimationFrame(rafId);
+      query.removeEventListener("change", onChange);
+    };
   }, []);
   return reduced;
 }
@@ -146,7 +149,6 @@ export function GameOverlays({ telemetryRef, chaseTelemetryRef }: GameOverlaysPr
             policeState={police.state}
             escapeProgress={experience.escapeProgress}
             bustProgress={experience.bustProgress}
-            reducedMotion={reduced}
           />
           <GoFlash reducedMotion={reduced} />
         </>
@@ -233,14 +235,12 @@ function GameplayHud({
   policeState,
   escapeProgress,
   bustProgress,
-  reducedMotion: _reducedMotion,
 }: {
   speedKmh: number;
   policeDistance: number;
   policeState: string;
   escapeProgress: number;
   bustProgress: number;
-  reducedMotion: boolean;
 }) {
   const [showControls, setShowControls] = useState(true);
   useEffect(() => {
