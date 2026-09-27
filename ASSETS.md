@@ -25,28 +25,37 @@ fetched by the app. Download each model from the Sketchfab page
 
 ## How each model is used
 
-- **Road** — if the model is a modular straight/curved segment kit it is
-  tiled along the generated centerline every 8 m (`ROAD_SEGMENT_SPACING`),
-  width-fitted to the 8 m road. The painted CanvasTexture road stays
-  underneath as the authoritative drivable surface, so any generated curve
-  keeps working. A single non-modular strip is treated as roadside dressing.
-- **Trees** — cloned per vegetation region (deterministic variant when the
-  GLB has several top-level meshes), height-fitted to ~5 m, deterministic
-  scale/rotation.
-- **Buildings** — cloned per generated footprint, fitted to the footprint
-  (max 2.5x per-axis distortion), existing box colliders kept.
-- **Water** — fitted to the generated water region; the first animation clip
-  plays via `AnimationMixer` when the GLB includes one (ripples etc.).
-  Boundary/hazard walls kept.
-- **Ramp** — cloned per ramp region, oriented by the existing ramp yaw
-  (facing the nearest road point), footprint-fitted, resting on the terrain.
-  The existing trimesh collider is kept (stability over fidelity).
+- **Road** — the Road Template GLB is tiled along the generated centerline
+  every 8 m on top of the painted CanvasTexture road, which stays underneath
+  as the authoritative drivable surface. (This is the pre-disable behaviour;
+  see the road-disable commit.)
+- **Trees** — the trees pack is split into its individual low-poly variants
+  at load time. For every vegetation region a limited number of interior
+  points is sampled deterministically (small region 1-3 trees, medium 3-7,
+  large 6-12), each point is mapped with the shared semantic transform, and
+  one tree variant is placed there. Trees are height-fitted to a 3-8 m band
+  with ±15% scale jitter and a deterministic golden-angle yaw. No tree is
+  created from an individual green pixel.
+- **Buildings** — ONE connected building region becomes ONE building model.
+  The region centroid maps through the shared transform, the normalized
+  model is fitted to the region footprint (max 3x per-axis, vertical follows
+  the smaller factor) and its long axis is aligned to the region aspect.
+  Existing box colliders kept.
+- **Water** — the contour-shaped flat water surface (painted from the
+  semantic water region) is authoritative. The Water Animation GLB is a
+  100 x 100 m ocean plane and cannot conform to arbitrary lake shapes, so it
+  is rendered only as a subtle enhancement tile scaled to sit inside the
+  region bounds. Boundary/hazard walls kept.
+- **Ramp** — ONE ramp region becomes ONE kicker model, oriented so the low
+  side faces the nearest road centerline point, footprint-fitted to the
+  9 x 11 m standard and resting on the terrain. The existing trimesh
+  collider is kept (stability over fidelity).
 
-Every model is auto-normalized at runtime (`normalizeModel`): Box3 size,
-center, and minY are measured and each placement lifts the model so its
-lowest point sits on the terrain. Centralized per-asset transforms
-(`WORLD_ASSET_CONFIG` in `lib/worldAssets.ts`): `scale`, `rotationY`,
-`yOffset`, `fit`, `targetHeight`.
+Every model is split into normalized variants at load time (`getVariants`):
+each variant's full world matrix is baked into cloned geometry and translated
+so the local origin is the horizontal Box3 centre with the base at Y = 0.
+Semantic placement then applies a single world position/rotation/scale - no
+Sketchfab origin offsets leak into the world.
 
 ## Audio
 

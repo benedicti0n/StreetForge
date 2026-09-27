@@ -29,6 +29,17 @@ export const WORLD_ASSETS: Record<WorldAssetKey, string> = {
   ramp: "/models/world/ramp/ramp.glb",
 };
 
+export const WORLD_ASSET_CONFIG: Record<WorldAssetKey, WorldAssetConfig> = {
+  // The Road Template GLB is a single 125 x 220 m non-modular network. It is
+  // intentionally NOT rendered in Forge mode (the CanvasTexture road is
+  // authoritative) - see the road-disable commit.
+  road: { fit: { width: 8, depth: 8 } },
+  trees: {},
+  buildings: {},
+  water: {},
+  ramp: {},
+};
+
 export interface WorldAssetConfig {
   /** Extra uniform scale applied on top of any auto-fit (default 1). */
   scale?: number;
@@ -44,19 +55,56 @@ export interface WorldAssetConfig {
   maxHeight?: number;
 }
 
-export const WORLD_ASSET_CONFIG: Record<WorldAssetKey, WorldAssetConfig> = {
-  // A straight road segment is tiled along the generated centerline; the
-  // painted CanvasTexture road stays underneath as the authoritative surface.
-  road: { fit: { width: 8, depth: 8 } },
-  // Trees are fitted by height so several variants stay comparable.
-  trees: { targetHeight: 5, scale: 0.9, maxHeight: 7 },
-  // Buildings are fitted per-footprint at placement time.
-  buildings: {},
-  // Water is fitted to the generated region bounding box at placement time.
-  water: {},
-  // Kicker ramps fit the standard ramp footprint (9 x 11 m).
-  ramp: { fit: { width: 9, depth: 11 } },
-};
+// ---------------------------------------------------------------------------
+// Legacy helpers kept only for the (to-be-disabled) road segment placement.
+// ---------------------------------------------------------------------------
+
+export interface PlacementTransform {
+  scale: Vector3;
+  yOffset: number;
+}
+
+export function computePlacement(
+  model: NormalizedModel,
+  key: WorldAssetKey,
+  fit?: { width: number; depth?: number },
+): PlacementTransform {
+  const config = WORLD_ASSET_CONFIG[key];
+  const base = config.scale ?? 1;
+  const fitTarget = fit ?? config.fit;
+  let sx = 1;
+  let sy = 1;
+  let sz = 1;
+  const clamp = (v: number) => Math.min(Math.max(v, 0.4), 2.5);
+  if (config.targetHeight) {
+    const h = (config.targetHeight / Math.max(model.size.y, 0.01)) * base;
+    const capped = config.maxHeight
+      ? Math.max(h, (config.maxHeight / Math.max(model.size.y, 0.01)) * base)
+      : h;
+    sx = sy = sz = clamp(capped);
+  } else if (fitTarget) {
+    const fx = (fitTarget.width ?? model.size.x) / Math.max(model.size.x, 0.001);
+    const fz = (fitTarget.depth ?? model.size.z) / Math.max(model.size.z, 0.001);
+    sx = clamp(fx * base);
+    sz = clamp(fz * base);
+    sy = clamp(((fx + fz) / 2) * base);
+  } else {
+    sx = sy = sz = clamp(base);
+  }
+  const scale = new Vector3(sx, sy, sz);
+  const yOffset = -model.minY * sy + (config.yOffset ?? 0);
+  return { scale, yOffset };
+}
+
+export function cloneVariant(gltf: GLTF, index: number): Object3D {
+  const directMeshes = gltf.scene.children.filter((child) =>
+    (child as Mesh).isMesh,
+  );
+  if (directMeshes.length > 1) {
+    return directMeshes[index % directMeshes.length].clone();
+  }
+  return gltf.scene.clone(true);
+}
 
 // ---------------------------------------------------------------------------
 // Loading (cached, single-flight, null on failure - no Suspense, so a missing
@@ -124,8 +172,131 @@ export function useWorldAsset(url: string): GLTF | null | undefined {
 }
 
 // ---------------------------------------------------------------------------
-// Normalization: every loaded GLB gets a Box3 measurement and a terrain
-// alignment computed once, without editing the original model.
+// Variant extraction + normalization.
+//
+// Every Sketchfab export is a single `Sketchfab_model` root containing the
+// whole scene (all trees, all street blocks, ...). Cloning that root scatters
+// every object at once - the source of the "props clustered near origin" and
+// "giant piles" bugs. Instead we split the scene into leaf groups (Object3D
+// nodes whose direct children are all Meshes) and treat each group as ONE
+// logical variant (one tree, one building block, one ramp).
+//
+// Each variant is then normalized ONCE into a wrapper whose local origin is
+// the horizontal Box3 centre with the base at Y = 0. Semantic placement then
+// controls only the wrapper's world position/rotation/scale - one transform,
+// no hidden Sketchfab origin offsets.
+// ---------------------------------------------------------------------------
+
+export interface NormalizedVariant {
+  /** Flattened clone: identity transforms, geometry centred at X/Z = 0,
+      base at Y = 0, unit scale. Safe to place at a world point directly. */
+  object: Object3D;
+  /** Footprint / height of the normalized variant in model metres. */
+  size: Vector3;
+  /** Always 0 (base is grounded by normalization). */
+  minY: number;
+  meshCount: number;
+}
+
+export interface VariantOptions {
+  /** Drop variants whose largest horizontal dimension is below this. */
+  minFootprint?: number;
+  /** Drop variants whose name matches (e.g. `/rock/i` for the trees pack). */
+  excludeNames?: RegExp;
+}
+
+/** True when every direct child of `object` is a mesh (a leaf group). */
+function isLeafMeshGroup(object: Object3D): boolean {
+  if (object.children.length === 0) {
+    return false;
+  }
+  return object.children.every((child) => (child as Mesh).isMesh);
+}
+
+function collectVariantGroups(root: Object3D): Object3D[] {
+  const out: Object3D[] = [];
+  root.traverse((object) => {
+    if (object === root || object.parent === root) {
+      return;
+    }
+    if (isLeafMeshGroup(object)) {
+      out.push(object);
+    }
+  });
+  return out;
+}
+
+/**
+ * Normalizes one leaf group from the ORIGINAL scene: every descendant mesh's
+ * full world matrix (all ancestor scales/rotations included) is baked into a
+ * fresh clone of its geometry, then the baked geometry is translated so the
+ * Box3 centre sits at (0, *, 0) and the base sits at Y = 0.
+ *
+ * The returned wrapper is a bare Object3D at identity transform whose meshes
+ * hold world-space geometry, so semantic placement controls it with a single
+ * world position/rotation/scale - no Sketchfab origin or ancestor offsets.
+ */
+function normalizeVariantGroup(group: Object3D): NormalizedVariant {
+  const wrapper = new Group();
+  let meshCount = 0;
+  group.traverse((object) => {
+    if ((object as Mesh).isMesh) {
+      const source = object as Mesh;
+      const geometry = source.geometry.clone();
+      geometry.applyMatrix4(source.matrixWorld);
+      wrapper.add(new Mesh(geometry, source.material));
+      meshCount++;
+    }
+  });
+  const box = new Box3().setFromObject(wrapper);
+  const center = box.getCenter(new Vector3());
+  const minY = box.min.y;
+  wrapper.traverse((object) => {
+    if ((object as Mesh).isMesh) {
+      (object as Mesh).geometry.translate(-center.x, -minY, -center.z);
+    }
+  });
+  const size = box.getSize(new Vector3());
+  return { object: wrapper, size, minY: 0, meshCount };
+}
+
+const variantCache = new Map<string, NormalizedVariant[]>();
+
+/** Collects + normalizes the variants of a loaded asset (cached). */
+export function getVariants(
+  gltf: GLTF,
+  options: VariantOptions = {},
+): NormalizedVariant[] {
+  const key = `${gltf.scene.uuid}:${options.minFootprint ?? 0}:${
+    options.excludeNames?.toString() ?? ""
+  }`;
+  const cached = variantCache.get(key);
+  if (cached) {
+    return cached;
+  }
+  const groups = collectVariantGroups(gltf.scene);
+  gltf.scene.updateMatrixWorld(true);
+  const variants: NormalizedVariant[] = [];
+  for (const group of groups) {
+    if (options.excludeNames?.test(group.name)) {
+      continue;
+    }
+    const variant = normalizeVariantGroup(group);
+    if (options.minFootprint !== undefined) {
+      const footprint = Math.max(variant.size.x, variant.size.z);
+      if (footprint < options.minFootprint) {
+        continue;
+      }
+    }
+    variants.push(variant);
+  }
+  variantCache.set(key, variants);
+  return variants;
+}
+
+// ---------------------------------------------------------------------------
+// Whole-scene measurements (water keeps its node hierarchy + animation, so it
+// is NOT flattened; only its box is measured).
 // ---------------------------------------------------------------------------
 
 export interface NormalizedModel {
@@ -137,10 +308,10 @@ export interface NormalizedModel {
   animationNames: string[];
 }
 
-const normalizedCache = new Map<string, NormalizedModel>();
+const modelCache = new Map<string, NormalizedModel>();
 
 export function normalizeModel(gltf: GLTF): NormalizedModel {
-  const cached = normalizedCache.get(gltf.scene.uuid);
+  const cached = modelCache.get(gltf.scene.uuid);
   if (cached) {
     return cached;
   }
@@ -162,70 +333,48 @@ export function normalizeModel(gltf: GLTF): NormalizedModel {
     meshCount,
     animationNames: (gltf.animations ?? []).map((clip) => clip.name),
   };
-  normalizedCache.set(gltf.scene.uuid, result);
+  modelCache.set(gltf.scene.uuid, result);
   return result;
 }
 
-export interface PlacementTransform {
-  scale: Vector3;
-  yOffset: number;
+// ---------------------------------------------------------------------------
+// Sizing helpers - explicit rules on the NORMALIZED footprint only.
+// ---------------------------------------------------------------------------
+
+/**
+ * Uniform scale that makes a variant's height match `targetHeight` (metres).
+ * Used for trees so every variant lands in the 3-8 m band (capped so the
+ * tiny shrub variants never get blown up into absurd blobs).
+ */
+export function scaleForHeight(
+  variant: NormalizedVariant,
+  targetHeight: number,
+): number {
+  const h = Math.max(variant.size.y, 0.01);
+  return Math.min(Math.max(targetHeight / h, 0.1), 6);
 }
 
 /**
- * Computes the placement transform for a model: auto-fit (footprint or
- * height), centralized config (scale/rotation/yOffset) and terrain alignment
- * (the model's minY is lifted to y = 0).
+ * Per-axis scale that fits a variant to a semantic footprint without absurd
+ * distortion. Vertical scale follows the smaller horizontal factor so
+ * proportions stay believable.
  */
-export function computePlacement(
-  model: NormalizedModel,
-  key: WorldAssetKey,
-  fit?: { width: number; depth?: number },
-): PlacementTransform {
-  const config = WORLD_ASSET_CONFIG[key];
-  const base = config.scale ?? 1;
-  const fitTarget = fit ?? config.fit;
-  let sx = 1;
-  let sy = 1;
-  let sz = 1;
-  const clamp = (v: number) => Math.min(Math.max(v, 0.4), 2.5);
-  if (config.targetHeight) {
-    const h = (config.targetHeight / Math.max(model.size.y, 0.01)) * base;
-    const capped = config.maxHeight
-      ? Math.max(h, config.maxHeight / Math.max(model.size.y, 0.01) * base)
-      : h;
-    sx = sy = sz = clamp(capped);
-  } else if (fitTarget) {
-    const fx =
-      (fitTarget.width ?? model.size.x) / Math.max(model.size.x, 0.001);
-    const fz =
-      (fitTarget.depth ?? model.size.z) / Math.max(model.size.z, 0.001);
-    sx = clamp(fx * base);
-    sz = clamp(fz * base);
-    sy = clamp(((fx + fz) / 2) * base);
-  } else {
-    sx = sy = sz = clamp(base);
-  }
-  const scale = new Vector3(sx, sy, sz);
-  const yOffset = -model.minY * sy + (config.yOffset ?? 0);
-  return { scale, yOffset };
+export function scaleForFootprint(
+  variant: NormalizedVariant,
+  width: number,
+  depth: number,
+): Vector3 {
+  const sx = width / Math.max(variant.size.x, 0.001);
+  const sz = depth / Math.max(variant.size.z, 0.001);
+  const sy = Math.min(sx, sz);
+  const clamp = (v: number) => Math.min(Math.max(v, 0.3), 3);
+  return new Vector3(clamp(sx), clamp(sy), clamp(sz));
 }
 
-/**
- * Picks a deterministic variant when the GLB exposes several top-level
- * meshes (e.g. several tree types in one file). Falls back to a full-scene
- * clone. The cached GLTF scene is never mutated.
- */
-export function cloneVariant(gltf: GLTF, index: number): Object3D {
-  const directMeshes = gltf.scene.children.filter((child) =>
-    (child as Mesh).isMesh,
-  );
-  if (directMeshes.length > 1) {
-    return directMeshes[index % directMeshes.length].clone();
-  }
-  return gltf.scene.clone(true);
-}
+// ---------------------------------------------------------------------------
+// Animation (water ripples etc.) - plays the first clip of a model.
+// ---------------------------------------------------------------------------
 
-/** Plays the first animation clip of a model (water ripples etc.). */
 export function useModelAnimation(
   model: NormalizedModel | null,
   rootRef: React.RefObject<Group | null>,
@@ -252,12 +401,16 @@ export function useModelAnimation(
 
 /** Dev-only summary of which world assets loaded and what they contain. */
 export function logWorldAssetStatus(
-  assets: Array<{ key: WorldAssetKey; value: GLTF | null | undefined }>,
+  assets: Array<{
+    key: WorldAssetKey;
+    value: GLTF | null | undefined;
+    variants: NormalizedVariant[];
+  }>,
 ): void {
   if (process.env.NODE_ENV !== "development") {
     return;
   }
-  const lines = assets.map(({ key, value }) => {
+  const lines = assets.map(({ key, value, variants }) => {
     const path = WORLD_ASSETS[key];
     if (!value) {
       return `${key}: FAILED ${path}`;
@@ -271,7 +424,7 @@ export function logWorldAssetStatus(
       model.animationNames.length > 0
         ? model.animationNames.join(",")
         : "none";
-    return `${key}: loaded (${model.meshCount} meshes, clips: ${clips}, size: ${size})`;
+    return `${key}: loaded (${model.meshCount} meshes, variants: ${variants.length}, clips: ${clips}, size: ${size})`;
   });
   console.info("[streetforge] world assets\n" + lines.join("\n"));
 }

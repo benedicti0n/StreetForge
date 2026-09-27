@@ -9,6 +9,7 @@
 
 import type { ParsedSketch } from "./parseSketch";
 import type { WorldTextureSource } from "./buildWorldTexture";
+import { semanticPointToWorld } from "./worldTransform";
 
 export interface ProceduralWorldDescriptor {
   kind: "procedural";
@@ -134,6 +135,12 @@ function gridToWorld(
     (gx / (grid - 1) - 0.5) * worldSize,
     (gy / (grid - 1) - 0.5) * worldSize,
   ];
+}
+
+/** Deterministic 0..1 hash used to seed placement randomization. */
+function hash01(seed: number): number {
+  const x = Math.sin(seed * 12.9898 + 78.233) * 43758.5453;
+  return x - Math.floor(x);
 }
 
 /** Default playable road used when the sketch has no readable road. */
@@ -273,22 +280,148 @@ export async function buildProceduralWorld(
     halfExtent: PLAYABLE_HALF_EXTENT,
   };
 }
+export interface SemanticBuilding {
+  position: [number, number, number];
+  size: [number, number, number];
+  yaw: number;
+  /** Deterministic variant seed (index into the building variants). */
+  variant: number;
+  /** Semantic-grid centroid (for dev diagnostics). */
+  semantic: [number, number];
+}
+
+export interface SemanticTree {
+  position: [number, number, number];
+  /** Deterministic variant seed (index into the tree variants). */
+  variant: number;
+  /** Target height in metres (3-8 m band). */
+  targetHeight: number;
+  /** Per-tree jitter multiplier on the fitted scale. */
+  scale: number;
+  /** Semantic-grid position (for dev diagnostics). */
+  semantic: [number, number];
+}
+
+export interface SemanticRamp {
+  position: [number, number, number];
+  width: number;
+  depth: number;
+  height: number;
+  yaw: number;
+  /** Semantic-grid centroid (for dev diagnostics). */
+  semantic: [number, number];
+}
+
 export interface SemanticWorldProps {
-  buildings: Array<{
-    position: [number, number, number];
-    size: [number, number, number];
-    yaw: number;
-  }>;
+  buildings: SemanticBuilding[];
   waterMask: Uint8Array | null;
   waterContour: Array<[number, number]> | null;
-  vegetation: Array<{ position: [number, number, number]; scale: number }>;
-  ramps: Array<{
-    position: [number, number, number];
-    width: number;
-    depth: number;
-    height: number;
-    yaw: number;
-  }>;
+  vegetation: SemanticTree[];
+  ramps: SemanticRamp[];
+  vegetationRegions: number;
+  buildingRegions: number;
+  rampRegions: number;
+  waterRegionCount: number;
+}
+
+/** Minimum semantic prop region area (cells), mirrors parseNormalizedMap. */
+const MIN_SEMANTIC_REGION_AREA = 12;
+/** Semantic class indices (must match quantizeSemanticMap palette order). */
+const VEGETATION_CLASS = 5;
+
+interface SemanticRegion {
+  pixels: number[];
+  minX: number;
+  maxX: number;
+  minY: number;
+  maxY: number;
+}
+
+/** Connected components of one semantic class, with the member pixels. */
+function semanticRegions(
+  classes: Uint8Array,
+  grid: number,
+  semanticClass: number,
+): SemanticRegion[] {
+  const labels = new Int32Array(grid * grid).fill(-1);
+  const stack: number[] = [];
+  const regions: SemanticRegion[] = [];
+  for (let y = 0; y < grid; y++) {
+    for (let x = 0; x < grid; x++) {
+      const index = y * grid + x;
+      if (classes[index] !== semanticClass || labels[index] !== -1) {
+        continue;
+      }
+      let minX = x;
+      let maxX = x;
+      let minY = y;
+      let maxY = y;
+      const pixels: number[] = [];
+      labels[index] = regions.length;
+      stack.push(index);
+      while (stack.length > 0) {
+        const current = stack.pop()!;
+        const cx = current % grid;
+        const cy = (current / grid) | 0;
+        pixels.push(current);
+        if (cx < minX) minX = cx;
+        if (cx > maxX) maxX = cx;
+        if (cy < minY) minY = cy;
+        if (cy > maxY) maxY = cy;
+        for (let dy = -1; dy <= 1; dy++) {
+          for (let dx = -1; dx <= 1; dx++) {
+            if (dx === 0 && dy === 0) {
+              continue;
+            }
+            const nx = cx + dx;
+            const ny = cy + dy;
+            if (nx < 0 || ny < 0 || nx >= grid || ny >= grid) {
+              continue;
+            }
+            const nIndex = ny * grid + nx;
+            if (classes[nIndex] === semanticClass && labels[nIndex] === -1) {
+              labels[nIndex] = regions.length;
+              stack.push(nIndex);
+            }
+          }
+        }
+      }
+      regions.push({ pixels, minX, maxX, minY, maxY });
+    }
+  }
+  return regions;
+}
+
+/** Deterministic tree count for a vegetation region (small/medium/large). */
+function treeCountForArea(areaCells: number, seed: number): number {
+  const base = areaCells < 150 ? 2 : areaCells < 700 ? 5 : 9;
+  const spread = base === 2 ? 1 : base === 5 ? 2 : 3;
+  return Math.max(
+    1,
+    base - spread + Math.floor(hash01(seed * 7 + 13) * (spread * 2 + 1)),
+  );
+}
+
+/** Picks `count` interior pixels from a region deterministically. */
+function sampleRegionPixels(
+  pixels: number[],
+  count: number,
+  seed: number,
+): number[] {
+  if (pixels.length <= count) {
+    return pixels;
+  }
+  const out: number[] = [];
+  const step = pixels.length / count;
+  for (let i = 0; i < count; i++) {
+    const offset = Math.floor(hash01(seed * 31 + i * 3) * 0.8);
+    const index = Math.min(
+      pixels.length - 1,
+      Math.floor((i + offset) * step),
+    );
+    out.push(pixels[index]);
+  }
+  return out;
 }
 
 /**
@@ -326,14 +459,12 @@ export async function buildProceduralWorldFromNormalized(
   const worldSize = PROCEDURAL_WORLD_SIZE;
   const { grid } = layout;
 
-  const toWorld = (x: number, y: number): [number, number] =>
-    gridToWorld(x, y, grid, worldSize);
   const toMeters = (cells: number) =>
     Math.min(25, Math.max(4, (cells / grid) * worldSize));
 
   const roadPoints = resamplePath(
     smoothPath(
-      layout.centerline.map(([x, y]) => toWorld(x, y)),
+      layout.centerline.map(([x, y]) => gridToWorld(x, y, grid, worldSize)),
       2,
     ),
     1.1,
@@ -364,51 +495,91 @@ export async function buildProceduralWorldFromNormalized(
     throw new Error("Normalized map spawns are not on the road.");
   }
 
-  const buildings = layout.buildings.map(({ x, y, widthCells, heightCells }) => {
-    const [wx, wz] = toWorld(x, y);
-    const hash = Math.abs(Math.round(wx * 12.9898 + wz * 78.233) % 7);
-    return {
-      position: [wx, 0, wz] as [number, number, number],
-      size: [
-        toMeters(widthCells),
-        4 + hash,
-        toMeters(heightCells),
-      ] as [number, number, number],
-      yaw: 0,
-    };
+  // --- Buildings: ONE logical region -> ONE building -------------------------
+  // Each region gets its centroid, footprint, variant seed and a 0 yaw; the
+  // renderer aligns the model's long axis to the region aspect.
+  const buildings: SemanticBuilding[] = layout.buildings.map(
+    ({ x, y, widthCells, heightCells }, index) => {
+      const [wx, wz] = semanticPointToWorld(x, y, grid, grid, worldSize);
+      const hash = Math.abs(
+        Math.round(wx * 12.9898 + wz * 78.233) % 7,
+      );
+      return {
+        position: [wx, 0, wz] as [number, number, number],
+        size: [
+          toMeters(widthCells),
+          4 + hash,
+          toMeters(heightCells),
+        ] as [number, number, number],
+        yaw: 0,
+        variant: index,
+        semantic: [x, y],
+      };
+    },
+  );
+
+  // --- Vegetation: sample a LIMITED number of points INSIDE each region ----
+  const vegetationRegions = semanticRegions(
+    layout.classes,
+    grid,
+    VEGETATION_CLASS,
+  ).filter((region) => region.pixels.length >= MIN_SEMANTIC_REGION_AREA);
+
+  const vegetation: SemanticTree[] = [];
+  vegetationRegions.forEach((region, regionIndex) => {
+    const count = treeCountForArea(region.pixels.length, regionIndex);
+    const sampled = sampleRegionPixels(
+      region.pixels,
+      count,
+      regionIndex,
+    );
+    sampled.forEach((cell, treeIndex) => {
+      const cx = cell % grid;
+      const cy = (cell / grid) | 0;
+      const [wx, wz] = semanticPointToWorld(cx, cy, grid, grid, worldSize);
+      const seed = regionIndex * 1000 + treeIndex;
+      vegetation.push({
+        position: [wx, 0, wz] as [number, number, number],
+        variant: seed,
+        targetHeight: 3 + hash01(seed * 11 + 5) * 5,
+        scale: 0.85 + hash01(seed * 17 + 3) * 0.3,
+        semantic: [cx, cy],
+      });
+    });
   });
 
-  const vegetation = layout.vegetation.map(({ x, y }, index) => {
-    const [wx, wz] = toWorld(x, y);
-    return {
-      position: [wx, 0, wz] as [number, number, number],
-      scale: 0.9 + ((index * 37) % 10) / 10,
-    };
-  });
-
-  const ramps = layout.ramps.map(({ x, y }) => {
-    const [wx, wz] = toWorld(x, y);
-    // Orient the ramp's low edge toward the nearest road point.
+  // --- Ramps: ONE region -> ONE ramp, low side facing the road --------------
+  const ramps: SemanticRamp[] = layout.ramps.map(({ x, y }) => {
+    const [wx, wz] = semanticPointToWorld(x, y, grid, grid, worldSize);
+    // Nearest road centerline point in GRID space, so the tangent is
+    // computed in the same coordinate frame as the ramp centroid.
     let bestX = 0;
-    let bestZ = 0;
+    let bestY = 0;
     let bestDistance = Infinity;
-    for (const [px, pz] of roadPoints) {
-      const d = Math.hypot(px - wx, pz - wz);
+    for (const [px, py] of layout.centerline) {
+      const d = (px - x) * (px - x) + (py - y) * (py - y);
       if (d < bestDistance) {
         bestDistance = d;
         bestX = px;
-        bestZ = pz;
+        bestY = py;
       }
     }
-    const yaw = Math.atan2(-(bestX - wx), -(bestZ - wz));
+    const yaw = Math.atan2(-(bestX - x), -(bestY - y));
     return {
       position: [wx, ROAD_RAISE, wz] as [number, number, number],
       width: 9,
       depth: 11,
       height: 2.6,
       yaw,
+      semantic: [x, y],
     };
   });
+
+  const waterRegionCount = semanticRegions(
+    layout.classes,
+    grid,
+    3,
+  ).filter((region) => region.pixels.length >= MIN_SEMANTIC_REGION_AREA).length;
 
   const semantic: SemanticWorldProps = {
     buildings,
@@ -416,6 +587,10 @@ export async function buildProceduralWorldFromNormalized(
     waterContour: null,
     vegetation,
     ramps,
+    vegetationRegions: vegetationRegions.length,
+    buildingRegions: buildings.length,
+    rampRegions: ramps.length,
+    waterRegionCount,
   };
 
   return {

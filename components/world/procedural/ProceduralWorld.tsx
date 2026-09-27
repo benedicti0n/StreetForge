@@ -21,13 +21,17 @@ import {
   buildWedge,
 } from "@/lib/sketchworld/geometry";
 import { traceBoundary } from "@/lib/sketchworld/parseSketch";
+import { semanticPointToWorld } from "@/lib/sketchworld/worldTransform";
 import { Shape, ShapeGeometry } from "three";
 import type { SafeSpawnResult } from "@/components/world/generated/SafeSpawnResolver";
 import {
   cloneVariant,
   computePlacement,
+  getVariants,
   logWorldAssetStatus,
   normalizeModel,
+  scaleForFootprint,
+  scaleForHeight,
   useModelAnimation,
   useWorldAsset,
   WORLD_ASSET_CONFIG,
@@ -142,10 +146,9 @@ export function ProceduralWorld({
     }
     const grid = descriptor.roadTexture.grid;
     const size = descriptor.worldSize;
-    return contour.map(([x, y]) => [
-      (x / (grid - 1) - 0.5) * size,
-      (y / (grid - 1) - 0.5) * size,
-    ] as [number, number]);
+    return contour.map(([x, y]) =>
+      semanticPointToWorld(x, y, grid, grid, size),
+    );
   }, [descriptor.semantic, descriptor.roadTexture, descriptor.worldSize]);
 
   const waterWallGeometry = useMemo(() => {
@@ -215,31 +218,27 @@ export function ProceduralWorld({
   const waterAsset = useWorldAsset(WORLD_ASSETS.water);
   const rampAsset = useWorldAsset(WORLD_ASSETS.ramp);
 
-  // Dev-only asset diagnostics: one summary once every load has settled.
-  const assetSettled =
-    roadAsset !== undefined &&
-    treeAsset !== undefined &&
-    buildingAsset !== undefined &&
-    waterAsset !== undefined &&
-    rampAsset !== undefined;
-  useEffect(() => {
-    if (!assetSettled) {
-      return;
-    }
-    logWorldAssetStatus([
-      { key: "road", value: roadAsset },
-      { key: "trees", value: treeAsset },
-      { key: "buildings", value: buildingAsset },
-      { key: "water", value: waterAsset },
-      { key: "ramp", value: rampAsset },
-    ]);
-  }, [assetSettled, roadAsset, treeAsset, buildingAsset, waterAsset, rampAsset]);
-
-  const roadModel = roadAsset ? normalizeModel(roadAsset) : null;
-  const treeModel = treeAsset ? normalizeModel(treeAsset) : null;
-  const buildingModel = buildingAsset ? normalizeModel(buildingAsset) : null;
+  // The real models are split into normalized variants at load time. Each
+  // variant's local origin is its horizontal Box3 centre with the base at
+  // Y = 0, so semantic placement is a single world transform.
+  const treeVariants = useMemo(
+    () =>
+      treeAsset
+        ? getVariants(treeAsset, { excludeNames: /rock/i })
+        : [],
+    [treeAsset],
+  );
+  const buildingVariants = useMemo(
+    () =>
+      buildingAsset ? getVariants(buildingAsset, { minFootprint: 2.5 }) : [],
+    [buildingAsset],
+  );
+  const rampVariants = useMemo(
+    () => (rampAsset ? getVariants(rampAsset) : []),
+    [rampAsset],
+  );
   const waterModel = waterAsset ? normalizeModel(waterAsset) : null;
-  const rampModel = rampAsset ? normalizeModel(rampAsset) : null;
+  const roadModel = roadAsset ? normalizeModel(roadAsset) : null;
 
   // Road asset pieces placed along the authoritative centerline. The painted
   // base road stays underneath, so the drivable layout never changes.
@@ -279,11 +278,10 @@ export function ProceduralWorld({
     return placements;
   }, [roadModel, descriptor.road]);
 
-  const treePlacement = treeModel
-    ? computePlacement(treeModel, "trees")
-    : null;
-
-  const waterBounds = useMemo(() => {
+  // Water region fit: the animated GLB is a 100 x 100 m plane, so it is
+  // scaled uniformly to sit INSIDE the semantic region (subtle enhancement).
+  // The contour-shaped flat surface below stays authoritative.
+  const waterTile = useMemo(() => {
     if (!waterModel || !waterContourWorld) {
       return null;
     }
@@ -297,17 +295,92 @@ export function ProceduralWorld({
       minZ = Math.min(minZ, z);
       maxZ = Math.max(maxZ, z);
     }
+    const width = maxX - minX;
+    const depth = maxZ - minZ;
+    if (width < 4 || depth < 4) {
+      return null;
+    }
     const cx = (minX + maxX) / 2;
     const cz = (minZ + maxZ) / 2;
-    const placement = computePlacement(waterModel, "water", {
-      width: maxX - minX,
-      depth: maxZ - minZ,
-    });
+    const scale =
+      Math.min(Math.max(Math.min(width, depth) / 100, 0.05), 1) * 0.85;
     return {
-      position: [cx, placement.yOffset, cz] as [number, number, number],
-      scale: placement.scale,
+      position: [cx, -waterModel.center.y * scale, cz] as [
+        number,
+        number,
+        number,
+      ],
+      scale,
+      bounds: { x: cx, z: cz, width, depth },
     };
   }, [waterModel, waterContourWorld]);
+
+  // Dev-only asset diagnostics: one summary once every load has settled.
+  const assetSettled =
+    roadAsset !== undefined &&
+    treeAsset !== undefined &&
+    buildingAsset !== undefined &&
+    waterAsset !== undefined &&
+    rampAsset !== undefined;
+  useEffect(() => {
+    if (!assetSettled) {
+      return;
+    }
+    logWorldAssetStatus([
+      { key: "road", value: roadAsset, variants: [] },
+      { key: "trees", value: treeAsset, variants: treeVariants },
+      { key: "buildings", value: buildingAsset, variants: buildingVariants },
+      { key: "water", value: waterAsset, variants: [] },
+      { key: "ramp", value: rampAsset, variants: rampVariants },
+    ]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [assetSettled]);
+
+  // Dev-only placement diagnostics: region vs spawned counts and the
+  // semantic -> world mapping of every logical object. Logged once per world.
+  const placementLoggedRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (placementLoggedRef.current === descriptor.worldId) {
+      return;
+    }
+    placementLoggedRef.current = descriptor.worldId;
+    if (process.env.NODE_ENV !== "development") {
+      return;
+    }
+    const sem = descriptor.semantic;
+    const lines: string[] = [];
+    lines.push("road: CanvasTexture ON, Road Template GLB OFF");
+    lines.push(`vegetation regions: ${sem?.vegetationRegions ?? 0}`);
+    lines.push(`trees spawned: ${sem?.vegetation.length ?? 0}`);
+    lines.push(`building regions: ${sem?.buildingRegions ?? 0}`);
+    lines.push(`buildings spawned: ${sem?.buildings.length ?? 0}`);
+    lines.push(`ramp regions: ${sem?.rampRegions ?? 0}`);
+    lines.push(`ramps spawned: ${sem?.ramps.length ?? 0}`);
+    lines.push(`water regions: ${sem?.waterRegionCount ?? 0}`);
+    if (waterTile) {
+      const b = waterTile.bounds;
+      lines.push(
+        `water bounds: x=${b.x.toFixed(1)} z=${b.z.toFixed(1)} width=${b.width.toFixed(1)} depth=${b.depth.toFixed(1)}`,
+      );
+    }
+    for (const building of sem?.buildings ?? []) {
+      lines.push(
+        `building ${building.variant}: semantic(${building.semantic[0]},${building.semantic[1]}) -> world(${building.position[0].toFixed(1)}, ${building.position[2].toFixed(1)})`,
+      );
+    }
+    for (const tree of sem?.vegetation ?? []) {
+      lines.push(
+        `tree ${tree.variant}: semantic(${tree.semantic[0]},${tree.semantic[1]}) -> world(${tree.position[0].toFixed(1)}, ${tree.position[2].toFixed(1)}) h=${tree.targetHeight.toFixed(1)}m`,
+      );
+    }
+    for (const ramp of sem?.ramps ?? []) {
+      lines.push(
+        `ramp: semantic(${ramp.semantic[0]},${ramp.semantic[1]}) -> world(${ramp.position[0].toFixed(1)}, ${ramp.position[2].toFixed(1)}) yaw=${ramp.yaw.toFixed(2)}`,
+      );
+    }
+    console.info("[streetforge] Forge placement\n" + lines.join("\n"));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [descriptor, waterTile]);
 
   return (
     <group>
@@ -396,89 +469,101 @@ export function ProceduralWorld({
         </mesh>
       )}
 
-      {/* Buildings - real GLB when loaded, box fallback only while absent */}
-      {(descriptor.semantic?.buildings ?? []).map((building, index) =>
-        buildingModel ? (
+      {/* Buildings - ONE region -> ONE real GLB building at the region
+          centroid; box fallback only while the asset is absent. */}
+      {(descriptor.semantic?.buildings ?? []).map((building, index) => {
+        const variant =
+          buildingVariants.length > 0
+            ? buildingVariants[building.variant % buildingVariants.length]
+            : null;
+        if (!variant) {
+          return (
+            <group key={`building-mesh-${index}`}>
+              <mesh
+                geometry={buildingGeometries[index]}
+                material={BUILDING_MATERIAL}
+                position={[
+                  building.position[0],
+                  building.size[1] / 2,
+                  building.position[2],
+                ]}
+                castShadow
+                receiveShadow
+              />
+              <mesh
+                geometry={roofGeometries[index]}
+                material={BUILDING_ROOF_MATERIAL}
+                position={[
+                  building.position[0],
+                  building.size[1] + 0.3,
+                  building.position[2],
+                ]}
+                castShadow
+              />
+            </group>
+          );
+        }
+        // Fit the normalized building to the semantic footprint, keeping
+        // believable proportions (vertical follows the smaller factor).
+        const scale = scaleForFootprint(
+          variant,
+          building.size[0],
+          building.size[2],
+        );
+        // Align the building's long axis to the region's long axis so the
+        // footprint aspect reads the same on the ground.
+        const regionWide = building.size[0] >= building.size[2];
+        const variantWide = variant.size.x >= variant.size.z;
+        const yaw = regionWide === variantWide ? 0 : Math.PI / 2;
+        return (
           <primitive
             key={`building-mesh-${index}`}
-            object={cloneVariant(buildingModel.gltf, index)}
+            object={variant.object.clone(true)}
             position={[
               building.position[0],
-              computePlacement(buildingModel, "buildings", {
-                width: building.size[0],
-                depth: building.size[2],
-              }).yOffset,
+              0,
               building.position[2],
             ]}
-            scale={computePlacement(buildingModel, "buildings", {
-              width: building.size[0],
-              depth: building.size[2],
-            }).scale}
-            rotation={[0, WORLD_ASSET_CONFIG.buildings.rotationY ?? 0, 0]}
+            scale={scale}
+            rotation={[0, yaw, 0]}
             castShadow
           />
-        ) : (
-          <group key={`building-mesh-${index}`}>
-            <mesh
-              geometry={buildingGeometries[index]}
-              material={BUILDING_MATERIAL}
-              position={[
-                building.position[0],
-                building.size[1] / 2,
-                building.position[2],
-              ]}
-              castShadow
-              receiveShadow
-            />
-            <mesh
-              geometry={roofGeometries[index]}
-              material={BUILDING_ROOF_MATERIAL}
-              position={[
-                building.position[0],
-                building.size[1] + 0.3,
-                building.position[2],
-              ]}
-              castShadow
-            />
-          </group>
-        ),
-      )}
+        );
+      })}
 
-      {/* Water - animated GLB surface when loaded, flat fallback only while absent */}
-      {waterModel && waterBounds ? (
+      {/* Water - the contour-shaped flat surface is the AUTHORITATIVE visual
+          (it follows the semantic region exactly). The animated GLB is only a
+          subtle enhancement tile scaled to sit inside the region. */}
+      {waterSurfaceGeometry && (
+        <mesh
+          geometry={waterSurfaceGeometry}
+          material={WATER_SURFACE_MATERIAL}
+        />
+      )}
+      {waterModel && waterTile && (
         <WaterModel
           model={waterModel}
-          position={waterBounds.position}
-          scale={waterBounds.scale}
+          position={waterTile.position}
+          scale={waterTile.scale}
         />
-      ) : (
-        waterSurfaceGeometry && (
-          <mesh
-            geometry={waterSurfaceGeometry}
-            material={WATER_SURFACE_MATERIAL}
-          />
-        )
       )}
 
-      {/* Ramps - real kicker GLB when loaded, wedge fallback only while absent */}
+      {/* Ramps - ONE region -> ONE kicker GLB, low side facing the road;
+          wedge fallback only while the asset is absent. */}
       {(descriptor.semantic?.ramps ?? []).map((ramp, index) => {
-        const rampPlacement = rampModel
-          ? computePlacement(rampModel, "ramp")
+        const variant = rampVariants.length > 0
+          ? rampVariants[index % rampVariants.length]
           : null;
         return (
           <group
             key={`ramp-mesh-${index}`}
-            position={[
-              ramp.position[0],
-              rampPlacement?.yOffset ?? ramp.position[1],
-              ramp.position[2],
-            ]}
-            rotation={[0, ramp.yaw + (WORLD_ASSET_CONFIG.ramp.rotationY ?? 0), 0]}
+            position={[ramp.position[0], 0, ramp.position[2]]}
+            rotation={[0, ramp.yaw, 0]}
           >
-            {rampModel ? (
+            {variant ? (
               <primitive
-                object={cloneVariant(rampModel.gltf, index)}
-                scale={rampPlacement?.scale}
+                object={variant.object.clone(true)}
+                scale={scaleForFootprint(variant, ramp.width, ramp.depth)}
                 castShadow
               />
             ) : (
@@ -501,9 +586,13 @@ export function ProceduralWorld({
         );
       })}
 
-      {/* Vegetation - real tree GLB when loaded, cone fallback only while absent */}
+      {/* Vegetation - real tree GLB variants sampled INSIDE each vegetation
+          region; cone fallback only while the asset is absent. */}
       {(descriptor.semantic?.vegetation ?? []).map((tree, index) => {
-        const variant = index % 3;
+        const variant =
+          treeVariants.length > 0
+            ? treeVariants[tree.variant % treeVariants.length]
+            : null;
         const fallback = (
           <group
             key={`tree-mesh-${index}`}
@@ -518,31 +607,29 @@ export function ProceduralWorld({
             />
             <mesh
               geometry={treeGeometry.canopy}
-              material={
-                variant === 1 ? CANOPY_LIGHT_MATERIAL : CANOPY_MATERIAL
-              }
+              material={index % 3 === 1 ? CANOPY_LIGHT_MATERIAL : CANOPY_MATERIAL}
               position={[0, 2.2, 0]}
-              scale={[variant === 2 ? 1.15 : 1, 1, variant === 2 ? 1.15 : 1]}
+              scale={[index % 3 === 2 ? 1.15 : 1, 1, index % 3 === 2 ? 1.15 : 1]}
               castShadow
             />
           </group>
         );
-        return treeModel && treePlacement ? (
+        if (!variant) {
+          return fallback;
+        }
+        // Deterministic height target (3-8 m) + per-tree jitter scale.
+        const scale = scaleForHeight(variant, tree.targetHeight) * tree.scale;
+        // Deterministic golden-angle yaw - no two trees face the same way.
+        const yaw = (tree.variant * 2.399963) % (Math.PI * 2);
+        return (
           <primitive
             key={`tree-mesh-${index}`}
-            object={cloneVariant(treeModel.gltf, index)}
-            position={[tree.position[0], treePlacement.yOffset, tree.position[2]]}
-            scale={treePlacement.scale.clone().multiplyScalar(tree.scale)}
-            rotation={[
-              0,
-              (index * 0.9) % (Math.PI * 2) +
-                (WORLD_ASSET_CONFIG.trees.rotationY ?? 0),
-              0,
-            ]}
+            object={variant.object.clone(true)}
+            position={[tree.position[0], 0, tree.position[2]]}
+            scale={scale}
+            rotation={[0, yaw, 0]}
             castShadow
           />
-        ) : (
-          fallback
         );
       })}
 
@@ -593,7 +680,7 @@ function WaterModel({
 }: {
   model: NormalizedModel;
   position: [number, number, number];
-  scale: import("three").Vector3;
+  scale: number | import("three").Vector3;
 }) {
   const rootRef: RefObject<Group | null> = useRef(null);
   useModelAnimation(model, rootRef);
