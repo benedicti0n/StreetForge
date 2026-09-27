@@ -168,7 +168,7 @@ export function WorldScene({
           />
         )}
         <PoliceChaseController
-          active={followCameraActive}
+          active={chaseActive}
           playerBodyRef={playerBodyRef}
           policeBodyRef={policeBodyRef}
           policeControlsRef={vehicleControls.police}

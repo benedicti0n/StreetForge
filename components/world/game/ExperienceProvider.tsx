@@ -40,7 +40,6 @@ const GENERATION_PHASES: WorldGenerationState["phase"][] = [
   "loadingWorld",
 ];
 
-const COUNTDOWN_TOTAL_MS = 3000;
 const COUNTDOWN_TICK_MS = 1000;
 
 interface ExperienceApi {
@@ -109,38 +108,39 @@ export function ExperienceProvider({ children }: ExperienceProviderProps) {
 
   // Generation lifecycle → experience state.
   useEffect(() => {
-    if (GENERATION_PHASES.includes(phase)) {
-      if (state === "editing" || state === "world-ready") {
-        setState("generating");
+    const id = requestAnimationFrame(() => {
+      if (GENERATION_PHASES.includes(phase)) {
+        if (state === "editing" || state === "world-ready") {
+          setState("generating");
+        }
+        return;
       }
-      return;
-    }
-    if (phase === "error") {
-      setState("editing");
-      return;
-    }
-    if (phase === "editing") {
-      if (state === "generating") {
+      if (phase === "error") {
         setState("editing");
+        return;
       }
-      return;
-    }
-    if (
-      phase === "worldReady" &&
-      generatedWorld &&
-      assetsReadyWorldIdRef.current === generatedWorld.worldId
-    ) {
-      setState("world-ready");
-    }
+      if (phase === "editing") {
+        if (state === "generating") {
+          setState("editing");
+        }
+        return;
+      }
+      if (
+        phase === "worldReady" &&
+        generatedWorld &&
+        assetsReadyWorldIdRef.current === generatedWorld.worldId
+      ) {
+        setState("world-ready");
+      }
+    });
+    return () => cancelAnimationFrame(id);
   }, [phase, generatedWorld, state]);
 
   const resetVehiclesAndProgress = useCallback(() => {
     gameRefsRef.current?.playerVehicleRef.current?.reset();
     gameRefsRef.current?.policeVehicleRef.current?.reset();
-    const chase = gameRefsRef.current?.chaseTelemetryRef.current;
-    if (chase) {
-      chase.distanceToPlayer = 0;
-      chase.state = "idle";
+    if (gameRefsRef.current?.chaseTelemetryRef) {
+      gameRefsRef.current.chaseTelemetryRef.current = null;
     }
     setEscapeProgress(0);
     setBustProgress(0);
@@ -185,7 +185,7 @@ export function ExperienceProvider({ children }: ExperienceProviderProps) {
     if (state !== "countdown") {
       return;
     }
-    setCountdownValue(3);
+    const rafId = requestAnimationFrame(() => setCountdownValue(3));
     let tick = 0;
     const interval = window.setInterval(() => {
       tick += 1;
@@ -202,7 +202,10 @@ export function ExperienceProvider({ children }: ExperienceProviderProps) {
         : null;
       setState("playing");
     }, COUNTDOWN_TICK_MS);
-    return () => window.clearInterval(interval);
+    return () => {
+      cancelAnimationFrame(rafId);
+      window.clearInterval(interval);
+    };
   }, [state]);
 
   const finishGame = useCallback((outcome: "escaped" | "busted") => {

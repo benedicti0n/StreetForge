@@ -81,7 +81,7 @@ export function WorldPipelineProvider({ children }: { children: ReactNode }) {
     return () => {
       cancelled = true;
     };
-  }, [generatedWorld?.worldId]);
+  }, [generatedWorld?.worldId, generation.markWorldReady]);
 
   const value = useMemo<WorldPipelineValue>(
     () => ({

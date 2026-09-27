@@ -258,15 +258,19 @@ export function WorldViewport() {
   // Siren lifecycle driven by the experience state.
   useEffect(() => {
     if (experienceState === "playing") {
-      vehicleAudio.unlock();
-      setSirenActive(true);
-      vehicleAudio.setSirenActive(true);
-      return;
+      const id = requestAnimationFrame(() => {
+        vehicleAudio.unlock();
+        setSirenActive(true);
+        vehicleAudio.setSirenActive(true);
+      });
+      return () => cancelAnimationFrame(id);
     }
     if (experienceState === "escaped") {
-      setSirenActive(false);
-      vehicleAudio.setSirenActive(false);
-      return;
+      const id = requestAnimationFrame(() => {
+        setSirenActive(false);
+        vehicleAudio.setSirenActive(false);
+      });
+      return () => cancelAnimationFrame(id);
     }
     if (experienceState === "busted") {
       const timer = window.setTimeout(() => {
@@ -276,8 +280,11 @@ export function WorldViewport() {
       return () => window.clearTimeout(timer);
     }
     if (experienceState === "countdown") {
-      setSirenActive(false);
-      vehicleAudio.setSirenActive(false);
+      const id = requestAnimationFrame(() => {
+        setSirenActive(false);
+        vehicleAudio.setSirenActive(false);
+      });
+      return () => cancelAnimationFrame(id);
     }
   }, [experienceState]);
 
