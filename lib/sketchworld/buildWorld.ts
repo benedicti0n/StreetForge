@@ -37,7 +37,7 @@ export interface ProceduralWorldDescriptor {
 }
 
 export const PROCEDURAL_WORLD_SIZE = 160;
-const ROAD_RAISE = 0.05;
+const ROAD_RAISE = 0.07;
 const SPAWN_PLAYER_ALONG = 0.35;
 const SPAWN_POLICE_BEHIND_M = 12;
 
@@ -175,8 +175,10 @@ export async function buildProceduralWorld(
   if (rawPath.length < 4) {
     rawPath = defaultRoadPath(worldSize);
   }
-  let roadPoints = smoothPath(rawPath, 2);
-  roadPoints = resamplePath(roadPoints, 1.6);
+  // Extra smoothing pass keeps the road's layout while removing the coarse
+  // parser's grid steps; the resample then densifies corners smoothly.
+  let roadPoints = smoothPath(rawPath, 3);
+  roadPoints = resamplePath(roadPoints, 1.1);
 
   // Road width from the drawn stroke thickness (in cells -> world metres).
   const widthCells = Math.max(2.5, parsed.roadWidthCells || 6);

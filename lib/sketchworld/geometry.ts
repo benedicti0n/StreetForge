@@ -4,11 +4,96 @@
 
 import { BufferGeometry, Float32BufferAttribute } from "three";
 
+/**
+ * Builds a road ribbon with shoulder strips in a SINGLE geometry.
+ * Four vertices per path point: shoulder-left, road-left, road-right,
+ * shoulder-right, each colored via vertex colors so there is no coplanar
+ * overlap between the shoulder and the asphalt.
+ */
+export function buildRoadRibbonWithShoulder(
+  points: Array<[number, number]>,
+  roadWidth: number,
+  shoulderWidth: number,
+  raiseY: number,
+  roadColor: [number, number, number],
+  shoulderColor: [number, number, number],
+  extension = 8,
+): BufferGeometry {
+  const extended: Array<[number, number]> = [...points];
+  if (points.length >= 2) {
+    const first = points[1];
+    const second = points[0];
+    const last = points[points.length - 2];
+    const secondLast = points[points.length - 1];
+    const startDir = [first[0] - second[0], first[1] - second[1]];
+    const endDir = [last[0] - secondLast[0], last[1] - secondLast[1]];
+    const startLen = Math.hypot(startDir[0], startDir[1]) || 1;
+    const endLen = Math.hypot(endDir[0], endDir[1]) || 1;
+    extended.unshift([
+      points[0][0] - (startDir[0] / startLen) * extension,
+      points[0][1] - (startDir[1] / startLen) * extension,
+    ]);
+    extended.push([
+      points[points.length - 1][0] + (endDir[0] / endLen) * extension,
+      points[points.length - 1][1] + (endDir[1] / endLen) * extension,
+    ]);
+  }
+  const halfRoad = roadWidth / 2;
+  const halfTotal = shoulderWidth / 2;
+  const halfMid = (halfRoad + halfTotal) / 2;
+  const shoulderRaise = 0.05;
+  const positions: number[] = [];
+  const colors: number[] = [];
+  const indices: number[] = [];
+  const pushVertex = (
+    x: number,
+    z: number,
+    y: number,
+    color: [number, number, number],
+  ) => {
+    positions.push(x, y, z);
+    colors.push(color[0], color[1], color[2]);
+  };
+  for (let i = 0; i < extended.length; i++) {
+    const [x0, z0] = extended[i];
+    const [x1, z1] = extended[Math.min(extended.length - 1, i + 1)];
+    const [xp, zp] = extended[Math.max(0, i - 1)];
+    const dx = x1 - xp;
+    const dz = z1 - zp;
+    const length = Math.hypot(dx, dz) || 1;
+    const px = -dz / length;
+    const pz = dx / length;
+    // 6 columns per point: solid shoulder, kerb step, road, road, kerb,
+    // solid shoulder - the shoulder reads clearly even at driving angles.
+    pushVertex(x0 - px * halfTotal, z0 - pz * halfTotal, raiseY + shoulderRaise, shoulderColor);
+    pushVertex(x0 - px * halfMid, z0 - pz * halfMid, raiseY + shoulderRaise, shoulderColor);
+    pushVertex(x0 - px * halfRoad, z0 - pz * halfRoad, raiseY, roadColor);
+    pushVertex(x0 + px * halfRoad, z0 + pz * halfRoad, raiseY, roadColor);
+    pushVertex(x0 + px * halfMid, z0 + pz * halfMid, raiseY + shoulderRaise, shoulderColor);
+    pushVertex(x0 + px * halfTotal, z0 + pz * halfTotal, raiseY + shoulderRaise, shoulderColor);
+  }
+  for (let i = 0; i < extended.length - 1; i++) {
+    const base = i * 6;
+    indices.push(base, base + 6, base + 1, base + 1, base + 6, base + 7);
+    indices.push(base + 1, base + 7, base + 2, base + 2, base + 7, base + 8);
+    indices.push(base + 2, base + 8, base + 3, base + 3, base + 8, base + 9);
+    indices.push(base + 3, base + 9, base + 4, base + 4, base + 9, base + 10);
+    indices.push(base + 4, base + 10, base + 5, base + 5, base + 10, base + 11);
+  }
+  const geometry = new BufferGeometry();
+  geometry.setAttribute("position", new Float32BufferAttribute(positions, 3));
+  geometry.setAttribute("color", new Float32BufferAttribute(colors, 3));
+  geometry.setIndex(indices);
+  geometry.computeVertexNormals();
+  return geometry;
+}
+
 /** Builds a flat ribbon mesh along a centerline. */
 export function buildRoadRibbon(
   points: Array<[number, number]>,
   width: number,
   raiseY: number,
+  extension = 8,
 ): BufferGeometry {
   const positions: number[] = [];
   const indices: number[] = [];
@@ -29,7 +114,6 @@ export function buildRoadRibbon(
     ] as [number, number];
     const startLen = Math.hypot(startDir[0], startDir[1]) || 1;
     const endLen = Math.hypot(endDir[0], endDir[1]) || 1;
-    const extension = 8;
     extended.unshift([
       points[0][0] - (startDir[0] / startLen) * extension,
       points[0][1] - (startDir[1] / startLen) * extension,
@@ -149,6 +233,66 @@ export function buildTreeGeometry(): { trunk: BufferGeometry; canopy: BufferGeom
   canopy.setIndex(canopyIndices);
   canopy.computeVertexNormals();
   return { trunk, canopy };
+}
+
+export interface DashPlacement {
+  position: [number, number, number];
+  yaw: number;
+}
+
+interface PathSegment {
+  ax: number;
+  az: number;
+  dx: number;
+  dz: number;
+  length: number;
+}
+
+/** Computes dashed road-marking placements along a centerline. */
+export function buildDashPlacements(
+  points: Array<[number, number]>,
+  spacing: number,
+  dashLength: number,
+  raiseY: number,
+): DashPlacement[] {
+  const placements: DashPlacement[] = [];
+  const segments: PathSegment[] = [];
+  let totalLength = 0;
+  for (let i = 1; i < points.length; i++) {
+    const [ax, az] = points[i - 1];
+    const [bx, bz] = points[i];
+    const dx = bx - ax;
+    const dz = bz - az;
+    const length = Math.hypot(dx, dz);
+    if (length < 0.001) {
+      continue;
+    }
+    segments.push({ ax, az, dx, dz, length });
+    totalLength += length;
+  }
+  if (totalLength <= 0) {
+    return placements;
+  }
+  const period = spacing + dashLength;
+  for (let dashStart = 0; dashStart < totalLength; dashStart += period) {
+    const dashEnd = Math.min(totalLength, dashStart + dashLength);
+    const midpoint = (dashStart + dashEnd) / 2;
+    let travelled = 0;
+    for (const segment of segments) {
+      if (midpoint <= travelled + segment.length) {
+        const t = (midpoint - travelled) / segment.length;
+        const x = segment.ax + segment.dx * t;
+        const z = segment.az + segment.dz * t;
+        placements.push({
+          position: [x, raiseY, z],
+          yaw: Math.atan2(-segment.dx, -segment.dz),
+        });
+        break;
+      }
+      travelled += segment.length;
+    }
+  }
+  return placements;
 }
 
 /** Builds a plain box geometry helper (shared instance-friendly usage). */
