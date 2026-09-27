@@ -106,6 +106,7 @@ export const PhysicsVehicle = forwardRef<
   const pivotRefs = useRef<Array<Group | null>>([null, null, null, null]);
   const wheelVisualSetups = useRef<Map<number, WheelVisualSetup>>(new Map());
   const appliedSteeringRef = useRef(0);
+  const playerStuckTimerRef = useRef(0);
 
   const handleWheelsReady = useCallback((wheels: VehicleWheelInfo[]) => {
     if (definition.wheelVisualMode === "static") {
@@ -274,6 +275,19 @@ export const PhysicsVehicle = forwardRef<
     const speed = controller.currentVehicleSpeed();
     const movingForward = speed > 0.5;
     const movingBackward = speed < -0.5;
+
+    // Player stuck recovery: throttle held but barely moving (e.g. pinned
+    // against the arena wall) - reset back onto the road so the player
+    // never permanently loses control.
+    if (isPlayer && control.throttle > 0.5 && Math.abs(speed) < 1.5) {
+      playerStuckTimerRef.current += stepWorld.timestep;
+      if (playerStuckTimerRef.current > 4) {
+        playerStuckTimerRef.current = 0;
+        handleReset();
+      }
+    } else {
+      playerStuckTimerRef.current = Math.max(0, playerStuckTimerRef.current - stepWorld.timestep);
+    }
 
     const speedRatio = clamp(Math.abs(speed) / physics.maxSpeed, 0, 1);
     const steeringAngle =
