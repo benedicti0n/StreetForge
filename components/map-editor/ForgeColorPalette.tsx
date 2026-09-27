@@ -4,8 +4,8 @@ import { useState } from "react";
 
 /**
  * Quick pencil-color buttons for the Forge drawing language. Clicking a
- * button activates the Draw tool and clicks the matching color swatch in
- * the Unlayer panel, so the user's strokes use the semantic color.
+ * button copies the semantic color code to the clipboard, so the user can
+ * paste it into the editor's color field.
  */
 
 export const FORGE_PENCIL_COLORS = [
@@ -16,62 +16,19 @@ export const FORGE_PENCIL_COLORS = [
   { color: "#e99a28", label: "Ramp" },
 ] as const;
 
-function hexRgb(hex: string): [number, number, number] {
-  return [
-    parseInt(hex.slice(1, 3), 16),
-    parseInt(hex.slice(3, 5), 16),
-    parseInt(hex.slice(5, 7), 16),
-  ];
-}
-
-function clickUnlayerSwatch(hex: string): boolean {
-  const target = hexRgb(hex);
-  const elements = document.querySelectorAll("button, span, div");
-  for (const element of elements) {
-    const rect = (element as HTMLElement).getBoundingClientRect();
-    if (rect.width < 12 || rect.width > 42 || rect.height < 12 || rect.height > 42) {
-      continue;
-    }
-    const match = getComputedStyle(element).backgroundColor.match(
-      /rgba?\((\d+),\s*(\d+),\s*(\d+)/,
-    );
-    if (!match) {
-      continue;
-    }
-    if (
-      Math.abs(Number(match[1]) - target[0]) <= 10 &&
-      Math.abs(Number(match[2]) - target[1]) <= 10 &&
-      Math.abs(Number(match[3]) - target[2]) <= 10
-    ) {
-      (element as HTMLElement).click();
-      return true;
-    }
-  }
-  return false;
-}
-
-function activateDrawTool(): boolean {
-  const buttons = document.querySelectorAll("button");
-  for (const button of buttons) {
-    const text = (button.textContent ?? "").trim();
-    const rect = button.getBoundingClientRect();
-    if (text === "Draw" && rect.width > 0) {
-      button.click();
-      return true;
-    }
-  }
-  return false;
-}
-
 export function ForgeColorPalette() {
   const [selected, setSelected] = useState<string>(FORGE_PENCIL_COLORS[0].color);
+  const [copied, setCopied] = useState<string | null>(null);
 
-  const handlePick = (color: string) => {
+  const handlePick = async (color: string, label: string) => {
     setSelected(color);
-    activateDrawTool();
-    window.setTimeout(() => {
-      clickUnlayerSwatch(color);
-    }, 400);
+    try {
+      await navigator.clipboard.writeText(color);
+    } catch {
+      // Clipboard may be unavailable; still show the copied hint.
+    }
+    setCopied(label);
+    window.setTimeout(() => setCopied(null), 1400);
   };
 
   return (
@@ -83,9 +40,9 @@ export function ForgeColorPalette() {
         <button
           key={color}
           type="button"
-          onClick={() => handlePick(color)}
-          aria-label={`Pick the ${label} pencil color`}
-          title={label}
+          onClick={() => handlePick(color, label)}
+          aria-label={`Copy the ${label} color code`}
+          title={`Copy ${color} (${label})`}
           className={`flex h-5 w-5 items-center justify-center rounded-full border transition-transform hover:scale-110 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent ${
             selected === color
               ? "border-accent ring-2 ring-accent/40"
@@ -94,8 +51,12 @@ export function ForgeColorPalette() {
           style={{ backgroundColor: color }}
         />
       ))}
-      <span className="ml-1 text-[9px] text-zinc-600">
-        {FORGE_PENCIL_COLORS.find((entry) => entry.color === selected)?.label}
+      <span className="ml-1 text-[9px] text-zinc-400">
+        {copied
+          ? `${copied} copied: ${
+              FORGE_PENCIL_COLORS.find((entry) => entry.label === copied)?.color
+            }`
+          : FORGE_PENCIL_COLORS.find((entry) => entry.color === selected)?.label}
       </span>
     </div>
   );
