@@ -11,14 +11,12 @@
 export const PARSE_GRID = 128;
 /** Cell darkness above which a pixel counts as drawn (0..1). */
 export const DARK_THRESHOLD = 0.45;
-/** Minimum blob area (cells) to be considered a feature. */
-export const MIN_FEATURE_AREA = 4;
-/** Compact blobs below this area are ramps. */
-export const RAMP_MAX_AREA = 60;
-/** Compact blobs at or above this area are buildings. */
-export const BUILDING_MIN_AREA = 60;
-/** Fill ratio above which a blob counts as a solid shape. */
-export const SOLID_FILL_RATIO = 0.5;
+/** Minimum blob area (cells) for a prop to be generated. */
+export const MIN_PROP_AREA = 6;
+/** Blobs at or below this area become a single tree. */
+export const TREE_MAX_AREA = 40;
+/** Wide/flat blobs at or above this aspect become a ramp. */
+export const RAMP_MIN_ASPECT = 1.8;
 
 export interface ParsedSketch {
   grid: number;
@@ -29,7 +27,12 @@ export interface ParsedSketch {
   /** Average road width in grid cells. */
   roadWidthCells: number;
   ramps: Array<{ x: number; y: number }>;
-  buildings: Array<{ x: number; y: number }>;
+  buildings: Array<{
+    x: number;
+    y: number;
+    widthCells: number;
+    heightCells: number;
+  }>;
   trees: Array<{ x: number; y: number }>;
 }
 
@@ -302,7 +305,7 @@ export async function parseSketch(dataUrl: string): Promise<ParsedSketch> {
       fillRatio: fillRatios[label],
       bounds: bounds[label],
     }))
-    .filter((feature) => feature.count >= MIN_FEATURE_AREA);
+    .filter((feature) => feature.count >= MIN_PROP_AREA);
 
   // The road is the dominant blob; everything else is classified by shape.
   let roadLabel = -1;
@@ -317,7 +320,12 @@ export async function parseSketch(dataUrl: string): Promise<ParsedSketch> {
   const roadPath: Array<[number, number]> = [];
   let roadWidthCells = 0;
   const ramps: Array<{ x: number; y: number }> = [];
-  const buildings: Array<{ x: number; y: number }> = [];
+  const buildings: Array<{
+    x: number;
+    y: number;
+    widthCells: number;
+    heightCells: number;
+  }> = [];
   const trees: Array<{ x: number; y: number }> = [];
 
   if (roadLabel !== -1) {
@@ -328,22 +336,38 @@ export async function parseSketch(dataUrl: string): Promise<ParsedSketch> {
     }
   }
 
+  // Every non-road blob becomes exactly one prop. No fill-ratio or
+  // shape heuristics: small blobs are trees, wide blobs are ramps, the
+  // rest are buildings. One logical mark -> one logical prop.
   for (const feature of features) {
-    if (feature.label === roadLabel || feature.count < MIN_FEATURE_AREA) {
+    if (feature.label === roadLabel || feature.count < MIN_PROP_AREA) {
       continue;
     }
     const { bounds: box } = feature;
+    const boxW = box.maxX - box.minX + 1;
+    const boxH = box.maxY - box.minY + 1;
+    const aspect = Math.max(boxW, boxH) / Math.max(1, Math.min(boxW, boxH));
     const centerX = (box.minX + box.maxX) / 2;
     const centerY = (box.minY + box.maxY) / 2;
-    if (feature.fillRatio >= SOLID_FILL_RATIO) {
-      if (feature.count < BUILDING_MIN_AREA) {
-        ramps.push({ x: centerX, y: centerY });
-      } else {
-        buildings.push({ x: centerX, y: centerY });
-      }
-    } else {
+    if (feature.count <= TREE_MAX_AREA) {
       trees.push({ x: centerX, y: centerY });
+    } else if (aspect >= RAMP_MIN_ASPECT) {
+      ramps.push({ x: centerX, y: centerY });
+    } else {
+      buildings.push({ x: centerX, y: centerY, widthCells: boxW, heightCells: boxH });
     }
+  }
+
+  if (process.env.NODE_ENV === "development") {
+    console.info(
+      "[streetforge] forge parse",
+      JSON.stringify({
+        road: roadPath.length >= 2 ? 1 : 0,
+        trees: trees.length,
+        ramps: ramps.length,
+        buildings: buildings.length,
+      }),
+    );
   }
 
   return {

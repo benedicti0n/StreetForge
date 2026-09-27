@@ -217,14 +217,25 @@ export async function buildProceduralWorld(
     };
   });
 
-  const buildings = parsed.buildings.map(({ x, y }) => {
-    const [wx, wz] = gridToWorld(x, y, grid, worldSize);
-    return {
-      position: [wx, 0, wz] as [number, number, number],
-      size: [9, 9, 9] as [number, number, number],
-      yaw: 0,
-    };
-  });
+  // Building footprints reflect the drawn shape (clamped 4-25 m), with a
+  // modest deterministic height.
+  const buildings = parsed.buildings.map(
+    ({ x, y, widthCells, heightCells }) => {
+      const [wx, wz] = gridToWorld(x, y, grid, worldSize);
+      const toMeters = (cells: number) =>
+        Math.min(25, Math.max(4, (cells / grid) * worldSize));
+      const hash = Math.abs(Math.round(wx * 12.9898 + wz * 78.233) % 7);
+      return {
+        position: [wx, 0, wz] as [number, number, number],
+        size: [
+          toMeters(widthCells),
+          4 + hash,
+          toMeters(heightCells),
+        ] as [number, number, number],
+        yaw: 0,
+      };
+    },
+  );
 
   const trees = parsed.trees.map(({ x, y }) => {
     const [wx, wz] = gridToWorld(x, y, grid, worldSize);
