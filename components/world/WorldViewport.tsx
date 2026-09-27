@@ -330,6 +330,13 @@ export function WorldViewport() {
       });
       return () => cancelAnimationFrame(id);
     }
+    // editing / generating / world-ready (e.g. returning home mid-race):
+    // make sure the pursuit siren is always switched off.
+    const id = requestAnimationFrame(() => {
+      setSirenActive(false);
+      vehicleAudio.setSirenActive(false);
+    });
+    return () => cancelAnimationFrame(id);
   }, [experienceState]);
 
   useEffect(() => {

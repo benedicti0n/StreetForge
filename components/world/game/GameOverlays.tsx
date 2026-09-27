@@ -151,6 +151,7 @@ export function GameOverlays({ telemetryRef, chaseTelemetryRef }: GameOverlaysPr
             bustProgress={experience.bustProgress}
             escapeSeconds={experience.escapeSeconds}
             bustSeconds={experience.bustSeconds}
+            onReturnHome={experience.editWorld}
           />
           <GoFlash reducedMotion={reduced} />
         </>
@@ -239,6 +240,7 @@ function GameplayHud({
   bustProgress,
   escapeSeconds,
   bustSeconds,
+  onReturnHome,
 }: {
   speedKmh: number;
   policeDistance: number;
@@ -247,6 +249,7 @@ function GameplayHud({
   bustProgress: number;
   escapeSeconds: number | null;
   bustSeconds: number | null;
+  onReturnHome: () => void;
 }) {
   const [showControls, setShowControls] = useState(true);
   useEffect(() => {
@@ -267,6 +270,14 @@ function GameplayHud({
             km/h
           </span>
         </div>
+        <button
+          type="button"
+          onClick={onReturnHome}
+          aria-label="Return to home"
+          className="pointer-events-auto rounded-md border border-edge/70 bg-panel/70 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.2em] text-zinc-400 backdrop-blur-sm transition-colors hover:border-zinc-500 hover:text-zinc-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+        >
+          Home
+        </button>
         <div className="flex items-baseline gap-2 rounded-md border border-accent/30 bg-panel/70 px-3 py-1.5 backdrop-blur-sm">
           <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-accent">
             {policeState === "recovery" ? "Recovery" : "Pursuit"}
