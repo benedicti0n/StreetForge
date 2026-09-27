@@ -149,6 +149,8 @@ export function GameOverlays({ telemetryRef, chaseTelemetryRef }: GameOverlaysPr
             policeState={police.state}
             escapeProgress={experience.escapeProgress}
             bustProgress={experience.bustProgress}
+            escapeSeconds={experience.escapeSeconds}
+            bustSeconds={experience.bustSeconds}
           />
           <GoFlash reducedMotion={reduced} />
         </>
@@ -235,12 +237,16 @@ function GameplayHud({
   policeState,
   escapeProgress,
   bustProgress,
+  escapeSeconds,
+  bustSeconds,
 }: {
   speedKmh: number;
   policeDistance: number;
   policeState: string;
   escapeProgress: number;
   bustProgress: number;
+  escapeSeconds: number | null;
+  bustSeconds: number | null;
 }) {
   const [showControls, setShowControls] = useState(true);
   useEffect(() => {
@@ -276,18 +282,32 @@ function GameplayHud({
 
       {showEscape && (
         <div className="absolute inset-x-0 bottom-14 flex flex-col items-center gap-1.5 px-6">
-          <p className="text-[10px] font-bold uppercase tracking-[0.35em] text-emerald-300">
-            Get Away
-          </p>
+          <div className="flex items-baseline gap-2">
+            <p className="text-[10px] font-bold uppercase tracking-[0.35em] text-emerald-300">
+              Get Away
+            </p>
+            {escapeSeconds !== null && (
+              <p className="font-mono text-sm font-bold tabular-nums leading-none text-emerald-200">
+                {escapeSeconds.toFixed(1)}s
+              </p>
+            )}
+          </div>
           <ProgressBar progress={escapeProgress} className="max-w-[260px]" />
         </div>
       )}
 
       {showBust && !showEscape && (
         <div className="absolute inset-x-0 bottom-14 flex flex-col items-center gap-1.5 px-6">
-          <p className="text-[10px] font-bold uppercase tracking-[0.35em] text-red-300">
-            Police closing in
-          </p>
+          <div className="flex items-baseline gap-2">
+            <p className="text-[10px] font-bold uppercase tracking-[0.35em] text-red-300">
+              Police closing in
+            </p>
+            {bustSeconds !== null && (
+              <p className="font-mono text-sm font-bold tabular-nums leading-none text-red-200">
+                {bustSeconds.toFixed(1)}s
+              </p>
+            )}
+          </div>
           <ProgressBar progress={bustProgress} className="max-w-[260px]" />
         </div>
       )}

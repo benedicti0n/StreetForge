@@ -61,6 +61,10 @@ interface ExperienceApi {
   countdownValue: number;
   escapeProgress: number;
   bustProgress: number;
+  /** Seconds until the escape bar completes while it is filling, else null. */
+  escapeSeconds: number | null;
+  /** Seconds until the bust bar completes while it is filling, else null. */
+  bustSeconds: number | null;
   result: GameResultStats | null;
   gameplayActive: boolean;
   introDismissed: boolean;
@@ -93,6 +97,8 @@ export function ExperienceProvider({ children }: ExperienceProviderProps) {
   const [countdownValue, setCountdownValue] = useState(3);
   const [escapeProgress, setEscapeProgress] = useState(0);
   const [bustProgress, setBustProgress] = useState(0);
+  const [escapeSeconds, setEscapeSeconds] = useState<number | null>(null);
+  const [bustSeconds, setBustSeconds] = useState<number | null>(null);
   const [result, setResult] = useState<GameResultStats | null>(null);
   // The intro's dismissed flag is read after mount only, so the server and
   // the first client render agree (no hydration mismatch).
@@ -121,6 +127,8 @@ export function ExperienceProvider({ children }: ExperienceProviderProps) {
   const lastContactAtRef = useRef(0);
   const escapeProgressRef = useRef(0);
   const bustProgressRef = useRef(0);
+  const escapeSecondsRef = useRef<number | null>(null);
+  const bustSecondsRef = useRef<number | null>(null);
 
   const phase = pipeline.generationState.phase;
   const generatedWorld = pipeline.generatedWorld;
@@ -174,6 +182,10 @@ export function ExperienceProvider({ children }: ExperienceProviderProps) {
     setBustProgress(0);
     escapeProgressRef.current = 0;
     bustProgressRef.current = 0;
+    escapeSecondsRef.current = null;
+    bustSecondsRef.current = null;
+    setEscapeSeconds(null);
+    setBustSeconds(null);
     setResult(null);
     statsRef.current = { peakSpeedKmh: 0, closestPoliceMeters: Infinity };
   }, []);
@@ -329,11 +341,17 @@ export function ExperienceProvider({ children }: ExperienceProviderProps) {
             1,
             escapeProgressRef.current + dt / ESCAPE_HOLD_SECONDS,
           );
+          // Seconds until the bar completes at the current fill rate.
+          escapeSecondsRef.current = Math.max(
+            0,
+            (1 - escapeProgressRef.current) * ESCAPE_HOLD_SECONDS,
+          );
         } else {
           escapeProgressRef.current = Math.max(
             0,
             escapeProgressRef.current - dt / ESCAPE_DECAY_SECONDS,
           );
+          escapeSecondsRef.current = null;
         }
 
         // BUST
@@ -342,22 +360,31 @@ export function ExperienceProvider({ children }: ExperienceProviderProps) {
           playerSpeedKmh < BUST_SLOW_SPEED_KMH &&
           playerGrounded;
         if (captureCondition) {
+          const multiplier = recentContact
+            ? BUST_COLLISION_MULTIPLIER
+            : 1;
           bustProgressRef.current = Math.min(
             1,
             bustProgressRef.current +
-              (dt / BUST_HOLD_SECONDS) *
-                (recentContact ? BUST_COLLISION_MULTIPLIER : 1),
+              (dt / BUST_HOLD_SECONDS) * multiplier,
+          );
+          bustSecondsRef.current = Math.max(
+            0,
+            (1 - bustProgressRef.current) * (BUST_HOLD_SECONDS / multiplier),
           );
         } else {
           bustProgressRef.current = Math.max(
             0,
             bustProgressRef.current - dt / BUST_DECAY_SECONDS,
           );
+          bustSecondsRef.current = null;
         }
       }
 
       setEscapeProgress(escapeProgressRef.current);
       setBustProgress(bustProgressRef.current);
+      setEscapeSeconds(escapeSecondsRef.current);
+      setBustSeconds(bustSecondsRef.current);
       if (escapeProgressRef.current >= 1) {
         finishGame("escaped");
         return;
@@ -384,6 +411,8 @@ export function ExperienceProvider({ children }: ExperienceProviderProps) {
       countdownValue,
       escapeProgress,
       bustProgress,
+      escapeSeconds,
+      bustSeconds,
       result,
       gameplayActive,
       introDismissed,
@@ -400,6 +429,8 @@ export function ExperienceProvider({ children }: ExperienceProviderProps) {
       countdownValue,
       escapeProgress,
       bustProgress,
+      escapeSeconds,
+      bustSeconds,
       result,
       gameplayActive,
       introDismissed,
