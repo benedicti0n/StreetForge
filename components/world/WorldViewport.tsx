@@ -111,6 +111,8 @@ export function WorldViewport() {
     halfExtent: number;
   } | null>(null);
   const previousPhaseRef = useRef(pipeline.generationState.phase);
+  const refreshAttemptsRef = useRef<Record<string, number>>({});
+  const [worldAssetKey, setWorldAssetKey] = useState("");
 
   const { state: experienceState, gameplayActive } = experience;
 
@@ -171,12 +173,45 @@ export function WorldViewport() {
     return () => window.clearTimeout(timer);
   }, [pipeline.generatedWorld, worldReadyForGenerated]);
 
-  // On asset-load failure the experience returns to editing.
+  // Signed asset URLs can expire: on the first load failure, refresh the
+  // world metadata once (same world id, zero new generations) and retry.
+  useEffect(() => {
+    if (!worldLoadError || !pipeline.generatedWorld) {
+      return;
+    }
+    if (worldLoadError.worldId !== pipeline.generatedWorld.worldId) {
+      return;
+    }
+    const worldId = pipeline.generatedWorld.worldId;
+    const attempts = refreshAttemptsRef.current[worldId] ?? 0;
+    if (attempts >= 1) {
+      return;
+    }
+    refreshAttemptsRef.current[worldId] = attempts + 1;
+    let cancelled = false;
+    (async () => {
+      const refreshed = await pipeline.refreshGeneratedWorld();
+      if (!cancelled && refreshed) {
+        setWorldLoadError(null);
+        setSplatState({ worldId: "", ready: false });
+        setWorldAssetKey(`${worldId}:r${refreshAttemptsRef.current[worldId]}`);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [worldLoadError, pipeline]);
+
+  // On asset-load failure the experience returns to editing. The first
+  // failure triggers a metadata refresh instead; only a second failure
+  // falls back to editing.
   useEffect(() => {
     if (
       activeWorldError !== null &&
       experienceState === "generating" &&
-      pipeline.generationState.phase === "worldReady"
+      pipeline.generationState.phase === "worldReady" &&
+      pipeline.generatedWorld !== null &&
+      (refreshAttemptsRef.current[pipeline.generatedWorld.worldId] ?? 0) >= 1
     ) {
       pipeline.resetGeneration();
     }
@@ -437,6 +472,7 @@ export function WorldViewport() {
               generatedHalfExtent={colliderInfo?.halfExtent ?? null}
               onColliderReady={handleColliderReady}
               onSplatReady={handleSplatReady}
+              worldAssetKey={worldAssetKey}
               controlsRef={controlsRef}
               vehicles={SCENE_VEHICLES}
               vehicleControls={vehicleControlsRef}

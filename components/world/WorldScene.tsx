@@ -82,6 +82,7 @@ interface WorldSceneProps {
   worldMode?: WorldMode;
   generatedSpawns?: SafeSpawnResult | null;
   generatedHalfExtent?: number | null;
+  worldAssetKey?: string;
   onColliderReady?: (spawns: SafeSpawnResult, halfExtent: number) => void;
   onSplatReady?: () => void;
   onVehicleLoaded?: () => void;
@@ -106,6 +107,7 @@ export function WorldScene({
   worldMode = "sandbox",
   generatedSpawns = null,
   generatedHalfExtent = null,
+  worldAssetKey = "",
   onColliderReady,
   onSplatReady,
   onVehicleLoaded,
@@ -161,6 +163,7 @@ export function WorldScene({
       <PhysicsWorld hasGround={worldMode === "sandbox"}>
         {generatedWorld && (
           <GeneratedWorld
+            key={worldAssetKey || generatedWorld.worldId}
             descriptor={generatedWorld}
             colliderDebug={colliderDebug}
             onSplatReady={onSplatReady}

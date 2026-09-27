@@ -24,6 +24,8 @@ interface WorldPipelineValue {
     mode: GenerationMode,
   ) => Promise<void>;
   resetGeneration: () => void;
+  /** Refetches fresh metadata for the current world (signed URL recovery). */
+  refreshGeneratedWorld: () => Promise<boolean>;
   mode: GenerationMode;
   setMode: (mode: GenerationMode) => void;
   generatedWorld: GeneratedWorldDescriptor | null;
@@ -50,6 +52,29 @@ export function WorldPipelineProvider({ children }: { children: ReactNode }) {
     },
     [generation],
   );
+
+  const refreshGeneratedWorld = useCallback(async () => {
+    const worldId = generatedWorld?.worldId;
+    if (!worldId) {
+      return false;
+    }
+    try {
+      const response = await fetch(
+        `/api/world/${encodeURIComponent(worldId)}`,
+        { cache: "no-store" },
+      );
+      const body = (await response.json()) as {
+        world?: GeneratedWorldDescriptor;
+      };
+      if (response.ok && body.world) {
+        setGeneratedWorld(body.world);
+        return true;
+      }
+      return false;
+    } catch {
+      return false;
+    }
+  }, [generatedWorld]);
 
   useEffect(() => {
     const loadWorldId =
@@ -88,6 +113,7 @@ export function WorldPipelineProvider({ children }: { children: ReactNode }) {
       generationState: generation.state,
       beginGeneration,
       resetGeneration: generation.reset,
+      refreshGeneratedWorld,
       mode,
       setMode,
       generatedWorld,
@@ -98,6 +124,7 @@ export function WorldPipelineProvider({ children }: { children: ReactNode }) {
       generation.state,
       generation.reset,
       beginGeneration,
+      refreshGeneratedWorld,
       mode,
       generatedWorld,
       worldMode,
