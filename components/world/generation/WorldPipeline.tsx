@@ -4,6 +4,7 @@ import {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
   useState,
   type ReactNode,
@@ -49,6 +50,34 @@ export function WorldPipelineProvider({ children }: { children: ReactNode }) {
     },
     [generation],
   );
+
+  useEffect(() => {
+    const loadWorldId = (
+      globalThis as unknown as { __SF_LOAD_WORLD_ID?: string }
+    ).__SF_LOAD_WORLD_ID;
+    if (!loadWorldId || loadWorldId === generatedWorld?.worldId) {
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const response = await fetch(`/api/world/${encodeURIComponent(loadWorldId)}`);
+        const body = (await response.json()) as {
+          status?: string;
+          world?: GeneratedWorldDescriptor;
+          error?: { message?: string };
+        };
+        if (!cancelled && response.ok && body.world) {
+          setGeneratedWorld(body.world);
+        }
+      } catch {
+        // ignore; sandbox remains active
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [generatedWorld?.worldId]);
 
   const value = useMemo<WorldPipelineValue>(
     () => ({
