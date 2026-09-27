@@ -382,7 +382,7 @@ export async function buildProceduralWorldFromNormalized(
     const [wx, wz] = toWorld(x, y);
     return {
       position: [wx, 0, wz] as [number, number, number],
-      scale: 0.75 + ((index * 37) % 10) / 16,
+      scale: 0.9 + ((index * 37) % 10) / 10,
     };
   });
 

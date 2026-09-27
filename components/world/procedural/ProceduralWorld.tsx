@@ -264,7 +264,7 @@ export function ProceduralWorld({
             map={worldTexture}
             roughness={1}
             toneMapped={false}
-            color="#5C5C5C"
+            color="#6B6B6B"
           />
         </mesh>
       ) : (
