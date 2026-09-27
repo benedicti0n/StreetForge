@@ -10,6 +10,7 @@ import {
   type ResolvedWorldTransform,
   type WorldTransform,
 } from "./worldTransform";
+import { readSplatQuality } from "@/lib/worldlabs/splatQuality";
 import { WorldCollider } from "./WorldCollider";
 import type { SafeSpawnResult } from "./SafeSpawnResolver";
 
@@ -33,7 +34,10 @@ export function GeneratedWorld({
     [descriptor],
   );
   const [resolved, setResolved] = useState<ResolvedWorldTransform | null>(null);
-  const splatUrl = useMemo(() => selectSplatUrl(descriptor), [descriptor]);
+  const splatUrl = useMemo(
+    () => selectSplatUrl(descriptor, readSplatQuality()),
+    [descriptor],
+  );
 
   // The collider resolves the final metric transform (semantics when
   // present, measured fallback otherwise). The splat must use the SAME

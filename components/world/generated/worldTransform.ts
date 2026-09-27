@@ -54,7 +54,11 @@ export function resolveFallbackTransform(
 
 export function selectSplatUrl(
   descriptor: GeneratedWorldDescriptor,
+  quality: "high" | "low" = "high",
 ): string | null {
   const { splats } = descriptor;
+  if (quality === "low") {
+    return splats.low ?? splats.medium ?? splats.full ?? null;
+  }
   return splats.medium ?? splats.full ?? splats.low ?? null;
 }

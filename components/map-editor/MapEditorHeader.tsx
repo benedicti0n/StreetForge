@@ -2,6 +2,11 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { WorldGenerationState, GenerationMode } from "@/components/world/generation/useWorldGeneration";
+import {
+  readSplatQuality,
+  writeSplatQuality,
+  type SplatQuality,
+} from "@/lib/worldlabs/splatQuality";
 
 export type MapCaptureFeedback = "captured" | "error" | null;
 
@@ -41,6 +46,9 @@ export function MapEditorHeader({
   onBuildWorld,
 }: MapEditorHeaderProps) {
   const [confirmingReset, setConfirmingReset] = useState(false);
+  const [splatQuality, setSplatQuality] = useState<SplatQuality>(() =>
+    readSplatQuality(),
+  );
   const confirmTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -83,6 +91,45 @@ export function MapEditorHeader({
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-3">
+          {generation.phase === "editing" && (
+            <div
+              role="group"
+              aria-label="Playable splat quality"
+              title="High uses the 500k splat tier; Low uses 100k for weaker GPUs."
+              className="flex items-center rounded-md border border-edge bg-background p-0.5"
+            >
+              <button
+                type="button"
+                onClick={() => {
+                  setSplatQuality("high");
+                  writeSplatQuality("high");
+                }}
+                aria-pressed={splatQuality === "high"}
+                className={`rounded px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.15em] transition-colors focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent ${
+                  splatQuality === "high"
+                    ? "bg-panel-raised text-zinc-100"
+                    : "text-zinc-500 hover:text-zinc-300"
+                }`}
+              >
+                High
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setSplatQuality("low");
+                  writeSplatQuality("low");
+                }}
+                aria-pressed={splatQuality === "low"}
+                className={`rounded px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.15em] transition-colors focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent ${
+                  splatQuality === "low"
+                    ? "bg-panel-raised text-zinc-100"
+                    : "text-zinc-500 hover:text-zinc-300"
+                }`}
+              >
+                Low
+              </button>
+            </div>
+          )}
           {generation.phase === "editing" && (
             <div
               role="group"
