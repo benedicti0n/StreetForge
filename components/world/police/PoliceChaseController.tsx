@@ -195,7 +195,7 @@ export function PoliceChaseController({
         if (hit === null || hit.normal.y >= avoidance.obstacleNormalY) {
           continue;
         }
-        const hitDistance = hit.toi;
+        const hitDistance = hit.timeOfImpact;
         if (probe.angle === 0) {
           centerDistance = hitDistance;
         } else if (probe.angle < 0) {
