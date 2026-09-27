@@ -16,6 +16,7 @@ interface WorldViewportOverlayProps {
   muted?: boolean;
   onToggleMute?: () => void;
   loadingWorld?: boolean;
+  worldLoadError?: string | null;
   generationActive?: boolean;
   colliderDebug?: boolean;
   onToggleColliderDebug?: () => void;
@@ -75,6 +76,7 @@ export function WorldViewportOverlay({
   muted = false,
   onToggleMute,
   loadingWorld = false,
+  worldLoadError = null,
   generationActive = false,
   colliderDebug = false,
   onToggleColliderDebug,
@@ -213,39 +215,46 @@ export function WorldViewportOverlay({
             </div>
           </div>
         )}
-        {onToggleColliderDebug ? (
-          <button
-            type="button"
-            onClick={(event) => {
-              event.stopPropagation();
-              onToggleColliderDebug();
-            }}
-            aria-label={
-              colliderDebug
-                ? "Hide the generated collider overlay"
-                : "Show the generated collider overlay"
-            }
-            className={`pointer-events-auto rounded-md border px-2 py-1 text-[9px] font-medium uppercase tracking-[0.15em] transition-colors focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent ${
-              colliderDebug
-                ? "border-red-800 bg-red-950/50 text-red-300"
-                : "border-edge bg-panel-raised/80 text-zinc-500 hover:text-zinc-300"
-            }`}
-          >
-            Collider
-          </button>
-        ) : loadingWorld ? (
-          <p className="text-[10px] uppercase tracking-[0.2em] text-zinc-500">
-            Loading world&hellip;
-          </p>
-        ) : vehicleLoadFailed ? (
-          <p className="text-[10px] uppercase tracking-[0.2em] text-red-400/90">
-            Vehicle models failed to load
-          </p>
-        ) : loadingVehicles ? (
-          <p className="text-[10px] uppercase tracking-[0.2em] text-zinc-500">
-            Loading vehicles&hellip;
-          </p>
-        ) : null}
+        <div className="flex items-center gap-2">
+          {onToggleColliderDebug && (
+            <button
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation();
+                onToggleColliderDebug();
+              }}
+              aria-label={
+                colliderDebug
+                  ? "Hide the generated collider overlay"
+                  : "Show the generated collider overlay"
+              }
+              className={`pointer-events-auto rounded-md border px-2 py-1 text-[9px] font-medium uppercase tracking-[0.15em] transition-colors focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent ${
+                colliderDebug
+                  ? "border-red-800 bg-red-950/50 text-red-300"
+                  : "border-edge bg-panel-raised/80 text-zinc-500 hover:text-zinc-300"
+              }`}
+            >
+              Collider
+            </button>
+          )}
+          {worldLoadError ? (
+            <p className="text-[10px] uppercase tracking-[0.2em] text-red-400/90">
+              {worldLoadError}
+            </p>
+          ) : loadingWorld ? (
+            <p className="text-[10px] uppercase tracking-[0.2em] text-zinc-500">
+              Loading world&hellip;
+            </p>
+          ) : vehicleLoadFailed ? (
+            <p className="text-[10px] uppercase tracking-[0.2em] text-red-400/90">
+              Vehicle models failed to load
+            </p>
+          ) : loadingVehicles ? (
+            <p className="text-[10px] uppercase tracking-[0.2em] text-zinc-500">
+              Loading vehicles&hellip;
+            </p>
+          ) : null}
+        </div>
       </div>
     </div>
   );

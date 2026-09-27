@@ -75,6 +75,8 @@ class WebGLErrorBoundary extends Component<
   }
 }
 
+const WORLD_ASSET_LOAD_TIMEOUT_MS = 90_000;
+
 export function WorldViewport() {
   const controlsRef = useRef<ControlsRef>(null);
   const viewportRef = useRef<HTMLElement>(null);
@@ -94,6 +96,10 @@ export function WorldViewport() {
     ready: boolean;
   }>({ worldId: "", ready: false });
   const [colliderDebug, setColliderDebug] = useState(false);
+  const [worldLoadError, setWorldLoadError] = useState<{
+    worldId: string;
+    message: string;
+  } | null>(null);
   const [colliderInfo, setColliderInfo] = useState<{
     worldId: string;
     spawns: SafeSpawnResult;
@@ -108,8 +114,16 @@ export function WorldViewport() {
     });
   }, [pipeline.generatedWorld]);
 
+  const activeWorldError =
+    pipeline.generatedWorld !== null &&
+    worldLoadError !== null &&
+    worldLoadError.worldId === pipeline.generatedWorld.worldId
+      ? worldLoadError.message
+      : null;
+
   const loadingWorld =
     pipeline.generatedWorld !== null &&
+    activeWorldError === null &&
     !(
       splatState.worldId === pipeline.generatedWorld.worldId &&
       splatState.ready
@@ -126,6 +140,22 @@ export function WorldViewport() {
     splatState.worldId === pipeline.generatedWorld.worldId &&
     splatState.ready &&
     colliderInfo?.worldId === pipeline.generatedWorld.worldId;
+
+  useEffect(() => {
+    if (!pipeline.generatedWorld) {
+      return;
+    }
+    if (worldReadyForGenerated) {
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      setWorldLoadError({
+        worldId: pipeline.generatedWorld?.worldId ?? "",
+        message: "Generated world failed to load.",
+      });
+    }, WORLD_ASSET_LOAD_TIMEOUT_MS);
+    return () => window.clearTimeout(timer);
+  }, [pipeline.generatedWorld, worldReadyForGenerated]);
 
   const vehicleControlsRef = useMemo(
     () =>
@@ -331,6 +361,7 @@ export function WorldViewport() {
             telemetryRef={playerTelemetryRef}
             chaseTelemetryRef={chaseTelemetryRef}
             loadingWorld={loadingWorld}
+            worldLoadError={activeWorldError}
             generationActive={generationActive}
             colliderDebug={colliderDebug}
             onToggleColliderDebug={() => setColliderDebug((d) => !d)}
