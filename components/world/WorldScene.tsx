@@ -42,6 +42,27 @@ function SparkWorldRenderer() {
   return <sparkRenderer args={[args]} />;
 }
 
+/**
+ * Lightweight built-in room environment used to give vehicle bodies gentle
+ * reflections. No HDR downloads - three.js RoomEnvironment is procedural.
+ */
+function SceneEnvironment() {
+  const gl = useThree((state) => state.gl);
+  const scene = useThree((state) => state.scene);
+  useFrame(() => {
+    if (!scene.environment) {
+      const pmrem = new PMREMGenerator(gl);
+      const environmentScene = new Scene();
+      environmentScene.add(new RoomEnvironment());
+      const texture = pmrem.fromScene(environmentScene, 0.04).texture;
+      scene.environment = texture;
+      pmrem.dispose();
+      environmentScene.clear();
+    }
+  });
+  return null;
+}
+
 class VehicleLoadErrorBoundary extends Component<
   { children: ReactNode; onFail?: () => void },
   { failed: boolean }
@@ -122,6 +143,7 @@ export function WorldScene({
       {proceduralWorld ? (
         <fog attach="fog" args={["#cfe4f5", 130, 240]} />
       ) : null}
+      <SceneEnvironment />
       <SparkWorldRenderer />
       <WorldCameraControls controlsRef={controlsRef} enabled={!followCameraActive} />
       <VehicleFollowCamera
@@ -130,13 +152,16 @@ export function WorldScene({
         active={followCameraActive}
       />
       {proceduralWorld ? (
-        <hemisphereLight args={["#ffffff", "#93bd6f", 1.15]} />
+        <>
+          <hemisphereLight args={["#e8f2ff", "#93bd6f", 1.5]} />
+          <ambientLight intensity={0.25} />
+        </>
       ) : (
         <hemisphereLight args={["#c9ced6", "#17171a", 1.1]} />
       )}
       <directionalLight
-        position={[proceduralWorld ? 60 : 20, proceduralWorld ? 80 : 30, proceduralWorld ? 30 : 10]}
-        intensity={proceduralWorld ? 1.9 : 2.5}
+        position={[proceduralWorld ? 30 : 20, proceduralWorld ? 45 : 30, proceduralWorld ? 20 : 10]}
+        intensity={proceduralWorld ? 2.6 : 2.5}
         castShadow
         shadow-mapSize={[2048, 2048]}
         shadow-camera-left={proceduralWorld ? -110 : -30}
