@@ -20,12 +20,8 @@ export const POLICE_CHASE = {
 
   /** Steering smoothing (rad/s max change). */
   maxSteeringRate: 4.5,
-  /** Steering damping on heading-error change. */
-  steeringDamping: 0.35,
 
-  /** Heading error (rad) above which throttle is cut. */
-  throttleCutError: 1.1,
-  /** Heading error (rad) above which braking is applied. */
+  /** Heading error (rad) above which braking/reverse-turn behavior begins. */
   brakeError: 2.2,
 
   /** Stuck detection. */
