@@ -9,11 +9,11 @@ import { useState } from "react";
  */
 
 export const FORGE_PENCIL_COLORS = [
-  { color: "#1c1c1f", label: "Road" },
-  { color: "#8a909a", label: "Building" },
-  { color: "#2f7fd0", label: "Water" },
-  { color: "#3e8e3f", label: "Vegetation" },
-  { color: "#e99a28", label: "Ramp" },
+  { color: "#000000", label: "Roads" },
+  { color: "#e8453c", label: "Buildings" },
+  { color: "#4a90d9", label: "Water" },
+  { color: "#7ed321", label: "Trees" },
+  { color: "#f5a623", label: "Ramps" },
 ] as const;
 
 export function ForgeColorPalette() {

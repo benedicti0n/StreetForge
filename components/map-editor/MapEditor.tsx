@@ -68,11 +68,11 @@ const MAP_EDITOR_OPTIONS: MapEditorOptions = {
   tools: {
     draw: {
       colors: [
-        "#1c1c1f",
-        "#8a909a",
-        "#2f7fd0",
-        "#3e8e3f",
-        "#e99a28",
+        "#000000",
+        "#e8453c",
+        "#4a90d9",
+        "#7ed321",
+        "#f5a623",
         "#b8a272",
         "#303238",
       ],
