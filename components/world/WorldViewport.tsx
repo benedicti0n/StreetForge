@@ -96,6 +96,7 @@ export function WorldViewport() {
     [],
   );
   const playerTelemetryRef = useRef<VehicleTelemetry | null>(null);
+  const policeTelemetryRef = useRef<VehicleTelemetry | null>(null);
 
   const handleEnterDriveMode = useCallback(() => {
     vehicleAudio.unlock();
@@ -219,6 +220,7 @@ export function WorldViewport() {
               playerVehicleRef={playerVehicleRef}
               playerBodyRef={playerBodyRef}
               playerTelemetryRef={playerTelemetryRef}
+              policeTelemetryRef={policeTelemetryRef}
               driveMode={driveMode}
               onVehicleLoaded={handleVehicleLoaded}
               onVehicleLoadFailed={handleVehicleLoadFailed}

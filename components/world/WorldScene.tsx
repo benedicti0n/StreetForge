@@ -51,6 +51,7 @@ interface WorldSceneProps {
   playerVehicleRef?: RefObject<PhysicsVehicleHandle | null>;
   playerBodyRef?: RefObject<RapierRigidBody | null>;
   playerTelemetryRef?: RefObject<VehicleTelemetry | null>;
+  policeTelemetryRef?: RefObject<VehicleTelemetry | null>;
   driveMode?: boolean;
   onVehicleLoaded?: () => void;
   onVehicleLoadFailed?: () => void;
@@ -63,6 +64,7 @@ export function WorldScene({
   playerVehicleRef,
   playerBodyRef,
   playerTelemetryRef,
+  policeTelemetryRef,
   driveMode = false,
   onVehicleLoaded,
   onVehicleLoadFailed,
@@ -119,7 +121,9 @@ export function WorldScene({
                 isPlayer={id === "race"}
                 autoResetBelowY={id === "race" ? -10 : undefined}
                 bodyRef={id === "race" ? playerBodyRef : undefined}
-                telemetryRef={id === "race" ? playerTelemetryRef : undefined}
+                telemetryRef={
+                  id === "race" ? playerTelemetryRef : policeTelemetryRef
+                }
                 onLoad={onVehicleLoaded}
               />
             ))}
