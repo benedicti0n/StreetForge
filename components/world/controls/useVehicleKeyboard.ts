@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import type { VehicleControlRef } from "@/components/world/vehicles/vehicleTypes";
 
 const DRIVE_KEYS = new Set([
@@ -34,6 +34,19 @@ export function useVehicleKeyboard(
   onResetRequested: () => void,
   onExitRequested: () => void,
 ): void {
+  // The callbacks are intentionally kept in refs so their identity changes
+  // (e.g. the experience context re-creating the exit handler every frame
+  // while escape/bust progress updates) can never tear down and re-subscribe
+  // the key listeners. Re-subscribing would clear the held-key set and zero
+  // the controls mid-pursuit. The effect below only depends on the stable
+  // `enabled` flag and the stable controls ref.
+  const onResetRef = useRef(onResetRequested);
+  const onExitRef = useRef(onExitRequested);
+  useEffect(() => {
+    onResetRef.current = onResetRequested;
+    onExitRef.current = onExitRequested;
+  });
+
   useEffect(() => {
     if (!enabled) {
       return;
@@ -73,11 +86,11 @@ export function useVehicleKeyboard(
         apply();
       } else if (event.code === "KeyR") {
         event.preventDefault();
-        onResetRequested();
+        onResetRef.current();
       } else if (event.code === "Escape") {
         keys.clear();
         apply();
-        onExitRequested();
+        onExitRef.current();
       }
     };
 
@@ -106,5 +119,7 @@ export function useVehicleKeyboard(
         handbrake: 0,
       });
     };
-  }, [controlsRef, enabled, onResetRequested, onExitRequested]);
+    // The callbacks live in refs (see above); only `enabled` controls the
+    // subscription lifetime.
+  }, [controlsRef, enabled]);
 }
