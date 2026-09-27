@@ -298,12 +298,13 @@ export const PhysicsVehicle = forwardRef<
     );
   });
 
-  useFrame(() => {
+  useFrame((state) => {
     const body = rigidBodyRef.current;
     const controller = controllerRef.current;
     if (!body || !controller) {
       return;
     }
+
     const control = controls.current;
     const linvel = body.linvel();
     const rotation = body.rotation();

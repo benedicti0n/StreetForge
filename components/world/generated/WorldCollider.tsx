@@ -15,7 +15,38 @@ import { createWorldTransform, type WorldTransform } from "./worldTransform";
 import { findSafeSpawn, type SafeSpawnResult } from "./SafeSpawnResolver";
 
 const _vertex = new Vector3();
+const _edgeA = new Vector3();
+const _edgeB = new Vector3();
 const _gltfLoader = new GLTFLoader();
+
+/**
+ * Terrain-aware winding normalization: triangles whose normals point
+ * meaningfully downward (inverted ground/ramp surfaces) are flipped so
+ * collisions behave correctly regardless of the source GLB's winding.
+ */
+function normalizeWinding(positions: number[], indices: number[]): void {
+  for (let t = 0; t < indices.length; t += 3) {
+    const i0 = indices[t] * 3;
+    const i1 = indices[t + 1] * 3;
+    const i2 = indices[t + 2] * 3;
+    _edgeA.set(
+      positions[i1] - positions[i0],
+      positions[i1 + 1] - positions[i0 + 1],
+      positions[i1 + 2] - positions[i0 + 2],
+    );
+    _edgeB.set(
+      positions[i2] - positions[i0],
+      positions[i2 + 1] - positions[i0 + 1],
+      positions[i2 + 2] - positions[i0 + 2],
+    );
+    _edgeA.cross(_edgeB);
+    if (_edgeA.y < -0.35) {
+      const swap = indices[t + 1];
+      indices[t + 1] = indices[t + 2];
+      indices[t + 2] = swap;
+    }
+  }
+}
 
 export interface ColliderBuildResult {
   geometry: BufferGeometry;
@@ -59,6 +90,7 @@ export function buildColliderGeometry(
     }
   });
   const geometry = new BufferGeometry();
+  normalizeWinding(positions, indices);
   geometry.setAttribute(
     "position",
     new BufferAttribute(new Float32Array(positions), 3),

@@ -102,8 +102,11 @@ export function WorldViewport() {
   const previousPhaseRef = useRef(pipeline.generationState.phase);
 
   const handleSplatReady = useCallback(() => {
-    setSplatState((state) => ({ ...state, ready: true }));
-  }, []);
+    setSplatState({
+      worldId: pipeline.generatedWorld?.worldId ?? "",
+      ready: true,
+    });
+  }, [pipeline.generatedWorld]);
 
   const loadingWorld =
     pipeline.generatedWorld !== null &&
