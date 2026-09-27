@@ -108,6 +108,12 @@ export const PhysicsVehicle = forwardRef<
   const appliedSteeringRef = useRef(0);
 
   const handleWheelsReady = useCallback((wheels: VehicleWheelInfo[]) => {
+    if (definition.wheelVisualMode === "static") {
+      // Static vehicles keep their wheel meshes as rigid children of the
+      // model - no reparenting, no corrective pivots, no per-frame writes.
+      wheelVisualSetups.current = new Map();
+      return;
+    }
     const setups = new Map<number, WheelVisualSetup>();
     wheels.forEach((wheel, index) => {
       const pivot = pivotRefs.current[index];
@@ -133,7 +139,7 @@ export const PhysicsVehicle = forwardRef<
       });
     });
     wheelVisualSetups.current = setups;
-  }, []);
+  }, [definition.wheelVisualMode]);
 
   useEffect(() => {
     const body = rigidBodyRef.current;
@@ -328,6 +334,10 @@ export const PhysicsVehicle = forwardRef<
     const body = rigidBodyRef.current;
     const controller = controllerRef.current;
     if (!body || !controller) {
+      return;
+    }
+    const animatedWheels = definition.wheelVisualMode === "animated";
+    if (!animatedWheels) {
       return;
     }
 

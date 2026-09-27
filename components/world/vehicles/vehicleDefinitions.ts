@@ -19,6 +19,12 @@ export interface VehiclePhysicsConfig {
   wheelRadius: number;
   /** Body-local suspension connection points for each wheel. */
   wheelPositions: Record<WheelSlot, Vector3Tuple>;
+  /**
+   * "animated": wheels get corrective pivots + spin/steering/suspension
+   * visuals. "static": wheel meshes stay rigid children of the vehicle
+   * (used for models with unreliable wheel-container origins).
+   */
+  wheelVisualMode: "animated" | "static";
   suspensionRestLength: number;
   suspensionStiffness: number;
   suspensionCompression: number;
@@ -56,6 +62,7 @@ export const VEHICLE_DEFINITIONS: Record<VehicleId, VehicleDefinition> = {
     label: "Entinity XF",
     modelPath: "/models/vehicles/race-car/race-car.glb",
     worldPosition: [0, 0.36, 4],
+    wheelVisualMode: "animated",
     visualScale: 0.0131,
     visualRotation: [0, Math.PI, 0],
     visualOffset: [-101.21, -46.945, 173.27],
@@ -93,6 +100,7 @@ export const VEHICLE_DEFINITIONS: Record<VehicleId, VehicleDefinition> = {
     label: "LSPD Police Interceptor",
     modelPath: "/models/vehicles/police-car/police-car.glb",
     worldPosition: [0, 0.481, 12],
+    wheelVisualMode: "static",
     visualScale: 0.185,
     visualRotation: [0, Math.PI, 0],
     visualOffset: [-5.185, -3.98, 12.4],
