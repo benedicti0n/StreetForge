@@ -6,9 +6,13 @@ import { useEffect, useRef, type RefObject } from "react";
 import { Quaternion, Vector3 } from "three";
 import type { VehicleTelemetry } from "@/components/world/vehicles/vehicleTypes";
 
-const CAMERA_OFFSET = new Vector3(0, 3.4, 6.6);
-const LOOK_OFFSET = new Vector3(0, 1.2, -5);
-const LOOKAHEAD_OFFSET = new Vector3(0, 0, -1);
+// Canonical convention: vehicle forward = -Z in world space (the body is
+// rotated by PI + spawn yaw so the source model's +Z nose faces -Z).
+// The camera must sit BEHIND the rear (+Z side, i.e. -forward) and look
+// toward the nose (-Z side, i.e. +forward).
+const CAMERA_OFFSET = new Vector3(0, 3.4, -6.6);
+const LOOK_OFFSET = new Vector3(0, 1.2, 5);
+const LOOKAHEAD_OFFSET = new Vector3(0, 0, 1);
 const LOOKAHEAD_MIN = 2;
 const LOOKAHEAD_MAX = 9;
 
