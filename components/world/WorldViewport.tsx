@@ -362,9 +362,6 @@ export function WorldViewport() {
 
   const handleColliderError = useCallback(() => {
     const worldId = pipeline.generatedWorld?.worldId ?? "";
-    setColliderInfo((previous) =>
-      previous && previous.worldId === worldId ? previous : previous,
-    );
     setWorldLoadError({
       worldId,
       message: "This world couldn't be made driveable.",
