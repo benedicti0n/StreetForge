@@ -18,6 +18,7 @@ import {
 
 export type WorldMode = "sandbox" | "generated";
 export type WorldKind = "forge" | "marble";
+export type ForgeMode = "ai" | "local";
 
 export type WorldDescriptor =
   | GeneratedWorldDescriptor
@@ -29,6 +30,10 @@ interface WorldPipelineValue {
     imageDataUrl: string,
     mode: GenerationMode,
   ) => Promise<void>;
+  /** AI-assisted forge: normalize via OpenAI, then build the world. */
+  beginForgeAi: (
+    imageDataUrl: string,
+  ) => Promise<WorldDescriptor | null>;
   resetGeneration: () => void;
   /** Refetches fresh metadata for the current world (signed URL recovery). */
   refreshGeneratedWorld: () => Promise<boolean>;
@@ -36,6 +41,9 @@ interface WorldPipelineValue {
   setMode: (mode: GenerationMode) => void;
   worldKind: WorldKind;
   setWorldKind: (kind: WorldKind) => void;
+  forgeMode: ForgeMode;
+  setForgeMode: (mode: ForgeMode) => void;
+  aiEnabled: boolean;
   generatedWorld: WorldDescriptor | null;
   worldMode: WorldMode;
   setWorldMode: (mode: WorldMode) => void;
@@ -47,9 +55,24 @@ export function WorldPipelineProvider({ children }: { children: ReactNode }) {
   const generation = useWorldGeneration();
   const [mode, setMode] = useState<GenerationMode>("draft");
   const [worldKind, setWorldKind] = useState<WorldKind>("forge");
+  const [forgeMode, setForgeMode] = useState<ForgeMode>("ai");
+  const [aiEnabled, setAiEnabled] = useState(false);
   const [worldMode, setWorldMode] = useState<WorldMode>("sandbox");
   const [generatedWorld, setGeneratedWorld] =
     useState<WorldDescriptor | null>(null);
+
+  const beginForgeAi = useCallback(
+    async (imageDataUrl: string) => {
+      setWorldKind("forge");
+      const world = await generation.startAi(imageDataUrl);
+      if (world) {
+        setGeneratedWorld(world);
+        return world;
+      }
+      return null;
+    },
+    [generation],
+  );
 
   const beginGeneration = useCallback(
     async (imageDataUrl: string, requestedMode: GenerationMode) => {
@@ -64,6 +87,29 @@ export function WorldPipelineProvider({ children }: { children: ReactNode }) {
     },
     [generation, worldKind],
   );
+
+  // Whether the OpenAI normalize stage is available (server-configured key).
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/forge/config", { cache: "no-store" })
+      .then((response) => response.json())
+      .then((body: { aiEnabled?: boolean }) => {
+        if (!cancelled) {
+          const enabled = Boolean(body.aiEnabled);
+          setAiEnabled(enabled);
+          setForgeMode(enabled ? "ai" : "local");
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setAiEnabled(false);
+          setForgeMode("local");
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const refreshGeneratedWorld = useCallback(async () => {
     const worldId = generatedWorld?.worldId;
@@ -124,12 +170,16 @@ export function WorldPipelineProvider({ children }: { children: ReactNode }) {
     () => ({
       generationState: generation.state,
       beginGeneration,
+      beginForgeAi,
       resetGeneration: generation.reset,
       refreshGeneratedWorld,
       mode,
       setMode,
       worldKind,
       setWorldKind,
+      forgeMode,
+      setForgeMode,
+      aiEnabled,
       generatedWorld,
       worldMode,
       setWorldMode,
@@ -138,9 +188,12 @@ export function WorldPipelineProvider({ children }: { children: ReactNode }) {
       generation.state,
       generation.reset,
       beginGeneration,
+      beginForgeAi,
       refreshGeneratedWorld,
       mode,
       worldKind,
+      forgeMode,
+      aiEnabled,
       generatedWorld,
       worldMode,
     ],

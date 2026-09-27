@@ -26,6 +26,9 @@ export interface ProceduralWorldDescriptor {
   };
   /** Source data for the single visual terrain texture. */
   roadTexture: WorldTextureSource | null;
+  /** Semantic props (buildings, water, vegetation, ramps) from the
+      AI-normalized map, when that path was used. */
+  semantic?: SemanticWorldProps | null;
   ramps: Array<{
     position: [number, number, number];
     width: number;
@@ -260,6 +263,172 @@ export async function buildProceduralWorld(
     ramps,
     buildings,
     trees,
+    spawns: { player, police },
+    halfExtent: worldSize / 2,
+  };
+}
+export interface SemanticWorldProps {
+  buildings: Array<{
+    position: [number, number, number];
+    size: [number, number, number];
+    yaw: number;
+  }>;
+  waterMask: Uint8Array | null;
+  waterContour: Array<[number, number]> | null;
+  vegetation: Array<{ position: [number, number, number]; scale: number }>;
+  ramps: Array<{
+    position: [number, number, number];
+    width: number;
+    depth: number;
+    height: number;
+    yaw: number;
+  }>;
+}
+
+/**
+ * Builds the world descriptor from an AI-normalized semantic layout.
+ * The road mask and centerline are authoritative; semantic regions become
+ * deterministic low-poly props.
+ */
+export async function buildProceduralWorldFromNormalized(
+  layout: {
+    roadMask: Uint8Array;
+    grid: number;
+    centerline: Array<[number, number]>;
+    classes: Uint8Array;
+    buildings: Array<{
+      x: number;
+      y: number;
+      widthCells: number;
+      heightCells: number;
+    }>;
+    waterMask: Uint8Array;
+    vegetation: Array<{
+      x: number;
+      y: number;
+      widthCells: number;
+      heightCells: number;
+    }>;
+    ramps: Array<{
+      x: number;
+      y: number;
+      widthCells: number;
+      heightCells: number;
+    }>;
+  },
+): Promise<ProceduralWorldDescriptor> {
+  const worldSize = PROCEDURAL_WORLD_SIZE;
+  const { grid } = layout;
+
+  const toWorld = (x: number, y: number): [number, number] =>
+    gridToWorld(x, y, grid, worldSize);
+  const toMeters = (cells: number) =>
+    Math.min(25, Math.max(4, (cells / grid) * worldSize));
+
+  const roadPoints = resamplePath(
+    smoothPath(
+      layout.centerline.map(([x, y]) => toWorld(x, y)),
+      2,
+    ),
+    1.1,
+  );
+
+  const player = spawnAlongPath(roadPoints, SPAWN_PLAYER_ALONG);
+  const totalLength = Math.max(1, roadPoints.length * 1.1);
+  const police = spawnAlongPath(
+    roadPoints,
+    Math.max(0, SPAWN_PLAYER_ALONG - SPAWN_POLICE_BEHIND_M / totalLength),
+  );
+
+  const pointInRoad = (x: number, z: number): boolean => {
+    const gx = Math.min(
+      grid - 1,
+      Math.max(0, Math.round(((x / worldSize) + 0.5) * (grid - 1))),
+    );
+    const gy = Math.min(
+      grid - 1,
+      Math.max(0, Math.round(((z / worldSize) + 0.5) * (grid - 1))),
+    );
+    return layout.roadMask[gy * grid + gx] === 1;
+  };
+  if (
+    !pointInRoad(player.position[0], player.position[2]) ||
+    !pointInRoad(police.position[0], police.position[2])
+  ) {
+    throw new Error("Normalized map spawns are not on the road.");
+  }
+
+  const buildings = layout.buildings.map(({ x, y, widthCells, heightCells }) => {
+    const [wx, wz] = toWorld(x, y);
+    const hash = Math.abs(Math.round(wx * 12.9898 + wz * 78.233) % 7);
+    return {
+      position: [wx, 0, wz] as [number, number, number],
+      size: [
+        toMeters(widthCells),
+        4 + hash,
+        toMeters(heightCells),
+      ] as [number, number, number],
+      yaw: 0,
+    };
+  });
+
+  const vegetation = layout.vegetation.map(({ x, y }, index) => {
+    const [wx, wz] = toWorld(x, y);
+    return {
+      position: [wx, 0, wz] as [number, number, number],
+      scale: 0.75 + ((index * 37) % 10) / 16,
+    };
+  });
+
+  const ramps = layout.ramps.map(({ x, y }) => {
+    const [wx, wz] = toWorld(x, y);
+    // Orient the ramp's low edge toward the nearest road point.
+    let bestX = 0;
+    let bestZ = 0;
+    let bestDistance = Infinity;
+    for (const [px, pz] of roadPoints) {
+      const d = Math.hypot(px - wx, pz - wz);
+      if (d < bestDistance) {
+        bestDistance = d;
+        bestX = px;
+        bestZ = pz;
+      }
+    }
+    const yaw = Math.atan2(-(bestX - wx), -(bestZ - wz));
+    return {
+      position: [wx, ROAD_RAISE, wz] as [number, number, number],
+      width: 9,
+      depth: 11,
+      height: 2.6,
+      yaw,
+    };
+  });
+
+  const semantic: SemanticWorldProps = {
+    buildings,
+    waterMask: layout.waterMask,
+    waterContour: null,
+    vegetation,
+    ramps,
+  };
+
+  return {
+    kind: "procedural",
+    worldId: `ai-${Date.now().toString(36)}`,
+    caption: "A forged world built from your sketch.",
+    worldSize,
+    road: { points: roadPoints, width: 8 },
+    roadTexture: {
+      roadMask: layout.roadMask,
+      grid,
+      centerline: layout.centerline,
+      corridorValid: true,
+      semanticClasses: layout.classes,
+    },
+    semantic,
+    ramps,
+    buildings,
+    trees: vegetation,
     spawns: { player, police },
     halfExtent: worldSize / 2,
   };

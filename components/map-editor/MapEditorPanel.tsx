@@ -50,6 +50,20 @@ export function MapEditorPanel({ collapsed = false }: MapEditorPanelProps) {
       );
     }
     setFeedback("captured");
+    if (
+      pipeline.worldKind === "forge" &&
+      pipeline.forgeMode === "ai" &&
+      pipeline.aiEnabled
+    ) {
+      const world = await pipeline.beginForgeAi(dataUrl);
+      if (!world) {
+        // AI stage failed: fall back to the local interpretation.
+        setFeedback("ai-fallback");
+        await pipeline.beginGeneration(dataUrl, pipeline.mode);
+        return;
+      }
+      return;
+    }
     await pipeline.beginGeneration(dataUrl, pipeline.mode);
   }, [pipeline]);
 

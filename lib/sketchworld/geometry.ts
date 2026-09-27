@@ -386,3 +386,26 @@ export function inflateContour(
 }
 
 
+
+/** Vertical boundary wall ribbon along a closed contour (keeps cars out). */
+export function buildEdgeWalls(
+  contour: Array<[number, number]>,
+  wallHeight: number,
+): BufferGeometry {
+  const positions: number[] = [];
+  const indices: number[] = [];
+  for (const [x, z] of contour) {
+    positions.push(x, 0, z, x, wallHeight, z);
+  }
+  for (let i = 0; i < contour.length - 1; i++) {
+    const base = i * 2;
+    const next = base + 2;
+    indices.push(base, next, base + 1, base + 1, next, next + 1);
+    indices.push(base, base + 1, next, base + 1, next + 1, next);
+  }
+  const geometry = new BufferGeometry();
+  geometry.setAttribute("position", new Float32BufferAttribute(positions, 3));
+  geometry.setIndex(indices);
+  geometry.computeVertexNormals();
+  return geometry;
+}

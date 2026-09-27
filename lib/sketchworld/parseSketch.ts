@@ -240,7 +240,7 @@ function labelRegions(
 }
 
 /** Moore boundary trace of one dark component (a closed contour loop). */
-function traceBoundary(
+export function traceBoundary(
   labels: Int32Array,
   label: number,
   grid: number,

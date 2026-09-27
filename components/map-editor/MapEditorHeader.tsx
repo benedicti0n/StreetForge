@@ -10,7 +10,7 @@ import {
 import { useExperience } from "@/components/world/game/ExperienceProvider";
 import type { WorldKind } from "@/components/world/generation/WorldPipeline";
 
-export type MapCaptureFeedback = "captured" | "error" | null;
+export type MapCaptureFeedback = "captured" | "error" | "ai-fallback" | null;
 
 interface MapEditorHeaderProps {
   editorReady: boolean;
@@ -233,16 +233,20 @@ export function MapEditorHeader({
               className={`min-w-[88px] text-right text-[11px] ${
                 feedback === "captured"
                   ? "text-emerald-400"
-                  : feedback === "error"
-                    ? "text-red-400"
-                    : "text-transparent"
+                  : feedback === "ai-fallback"
+                    ? "text-amber-400"
+                    : feedback === "error"
+                      ? "text-red-400"
+                      : "text-transparent"
               }`}
             >
               {feedback === "captured"
                 ? "Map captured"
-                : feedback === "error"
-                  ? "Capture failed"
-                  : "\u00a0"}
+                : feedback === "ai-fallback"
+                  ? "AI failed - local interpretation"
+                  : feedback === "error"
+                    ? "Capture failed"
+                    : "\u00a0"}
             </span>
             <button
               type="button"

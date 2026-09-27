@@ -18,6 +18,8 @@ function hexRgb(hex: string): [number, number, number] {
   ];
 }
 
+export const WATER_COLOR = "#3388DD";
+
 export const TERRAIN_COLOR = "#93bd6f";
 export const SHOULDER_COLOR = "#bca676";
 export const ASPHALT_COLOR = "#303139";
@@ -30,6 +32,9 @@ export interface WorldTextureSource {
   /** Road centerline in grid coordinates (for painted markings). */
   centerline: Array<[number, number]>;
   corridorValid: boolean;
+  /** Optional quantized semantic classes (AI forge): water/shoulder painted
+      directly from the semantic map. */
+  semanticClasses?: Uint8Array;
 }
 
 /**
@@ -92,6 +97,7 @@ export function buildWorldTexture(
   const terrain = hexRgb(TERRAIN_COLOR);
   const shoulder = hexRgb(SHOULDER_COLOR);
   const asphalt = hexRgb(ASPHALT_COLOR);
+  const water = hexRgb(WATER_COLOR);
 
   const shoulderMask = dilateRoadMask(roadMask, grid, 3);
   const scale = textureSize / grid;
@@ -111,6 +117,11 @@ export function buildWorldTexture(
         data[offset + 1] = asphalt[1];
         data[offset + 2] = asphalt[2];
         roadPixels++;
+      } else if (source.semanticClasses && source.semanticClasses[cell] === 3) {
+        // Water (semantic class index 3) painted straight from the map.
+        data[offset] = water[0];
+        data[offset + 1] = water[1];
+        data[offset + 2] = water[2];
       } else if (shoulderMask[cell] === 1) {
         data[offset] = shoulder[0];
         data[offset + 1] = shoulder[1];

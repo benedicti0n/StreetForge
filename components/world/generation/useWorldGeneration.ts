@@ -7,7 +7,17 @@ import type {
 } from "@/lib/worldlabs/types";
 import { WORLD_LABS } from "@/lib/worldlabs/client-shared";
 import { parseSketch } from "@/lib/sketchworld/parseSketch";
-import { buildProceduralWorld } from "@/lib/sketchworld/buildWorld";
+import {
+  buildProceduralWorld,
+  buildProceduralWorldFromNormalized,
+} from "@/lib/sketchworld/buildWorld";
+import { quantizeSemanticMap } from "@/lib/forge-ai/quantizeSemanticMap";
+import { parseNormalizedMap } from "@/lib/forge-ai/parseNormalizedMap";
+import {
+  cacheNormalized,
+  getCachedNormalized,
+  hashSketch,
+} from "@/lib/forge-ai/sessionCache";
 
 export type GenerationPhase =
   | "editing"
@@ -42,6 +52,14 @@ interface WorldGenerationApi {
   ): Promise<GeneratedWorldDescriptor | null>;
   /** Builds a local procedural world from the sketch - no network calls. */
   startLocal(
+    imageDataUrl: string,
+  ): Promise<Awaited<ReturnType<typeof buildProceduralWorld>> | null>;
+  /**
+   * AI-assisted path: normalizes the sketch via OpenAI, quantizes and
+   * parses the semantic map, then builds the world. Returns null when the
+   * AI stage fails (the caller falls back to local Forge).
+   */
+  startAi(
     imageDataUrl: string,
   ): Promise<Awaited<ReturnType<typeof buildProceduralWorld>> | null>;
   /** Marks an already-generated world as the active result (refetch path). */
@@ -198,6 +216,74 @@ export function useWorldGeneration(): WorldGenerationApi {
     }));
   }, []);
 
+function loadImageElement(dataUrl: string): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => resolve(image);
+    image.onerror = () => reject(new Error("Failed to decode the image."));
+    image.src = dataUrl;
+  });
+}
+
+  const startAi = useCallback(
+    async (
+      imageDataUrl: string,
+    ): Promise<Awaited<ReturnType<typeof buildProceduralWorld>> | null> => {
+      const token = generationTokenRef.current + 1;
+      generationTokenRef.current = token;
+      abortControllerRef.current?.abort();
+      setResult(null);
+      setState({ phase: "capturing", mode: "draft" });
+      try {
+        let normalized = getCachedNormalized(hashSketch(imageDataUrl));
+        if (!normalized) {
+          setState({ phase: "submitting", mode: "draft" });
+          const controller = new AbortController();
+          abortControllerRef.current = controller;
+          const response = await fetch("/api/forge/normalize", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ image: imageDataUrl }),
+            cache: "no-store",
+            signal: controller.signal,
+          });
+          const body = (await response.json()) as {
+            image?: string;
+            error?: { code?: string; message?: string };
+          };
+          if (!response.ok || !body.image) {
+            throw new Error(body.error?.message ?? "AI normalization failed.");
+          }
+          normalized = body.image;
+          cacheNormalized(hashSketch(imageDataUrl), normalized);
+        }
+        if (generationTokenRef.current !== token) {
+          return null;
+        }
+
+        setState({ phase: "generating", progress: 60, mode: "draft" });
+        const image = await loadImageElement(normalized);
+        const quantized = await quantizeSemanticMap(image);
+        const layout = parseNormalizedMap(quantized.classes, quantized.grid);
+        const world = await buildProceduralWorldFromNormalized(layout);
+        if (generationTokenRef.current !== token) {
+          return null;
+        }
+        setResult(world);
+        setState({ phase: "worldReady", progress: 100, mode: "draft" });
+        return world;
+      } catch {
+        if (generationTokenRef.current !== token) {
+          return null;
+        }
+        setResult(null);
+        setState({ phase: "editing", mode: "draft" });
+        return null;
+      }
+    },
+    [],
+  );
+
   const startLocal = useCallback(
     async (
       imageDataUrl: string,
@@ -248,5 +334,5 @@ export function useWorldGeneration(): WorldGenerationApi {
     setState({ phase: "editing", mode: "draft" });
   }, []);
 
-  return { state, result, start, startLocal, markWorldReady, reset };
+  return { state, result, start, startLocal, startAi, markWorldReady, reset };
 }
