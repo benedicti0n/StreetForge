@@ -8,6 +8,7 @@ import {
   IDLE_CONTROLS,
   NEUTRAL_CONTROLS,
   type VehicleControlRef,
+  type VehicleTelemetry,
 } from "@/components/world/vehicles/vehicleTypes";
 import { POLICE_CHASE } from "./policeChaseConfig";
 import { POLICE_AVOIDANCE } from "./policeAvoidanceConfig";
@@ -42,6 +43,7 @@ interface PoliceChaseControllerProps {
   playerBodyRef?: RefObject<RapierRigidBody | null>;
   policeBodyRef?: RefObject<RapierRigidBody | null>;
   policeControlsRef: VehicleControlRef;
+  policeTelemetryRef?: RefObject<VehicleTelemetry | null>;
   telemetryRef?: RefObject<ChaseTelemetry | null>;
   chaseConfig?: typeof POLICE_CHASE;
   avoidanceConfig?: typeof POLICE_AVOIDANCE;
@@ -52,6 +54,7 @@ export function PoliceChaseController({
   playerBodyRef,
   policeBodyRef,
   policeControlsRef,
+  policeTelemetryRef,
   telemetryRef,
   chaseConfig,
   avoidanceConfig,
@@ -146,6 +149,34 @@ export function PoliceChaseController({
     const absError = Math.abs(headingError);
 
     let state = stateRef.current;
+
+    const groundedWheels = policeTelemetryRef?.current?.groundedWheels ?? 4;
+    const airborne = groundedWheels < 2;
+
+    // While airborne the police avoids aggressive braking, full steering
+    // oscillation and the handbrake; it holds a moderate throttle until the
+    // wheels touch ground again.
+    if (airborne) {
+      Object.assign(policeControlsRef.current, {
+        ...NEUTRAL_CONTROLS,
+        throttle: 0.25,
+        brake: 0,
+        handbrake: 0,
+        steering: steering * 0.4,
+      });
+      if (telemetryRef) {
+        telemetryRef.current = {
+          state,
+          distanceToPlayer: distance,
+          headingError,
+          playerSpeedKmh: playerSpeed * 3.6,
+          policeSpeedKmh: policeSpeed * 3.6,
+          predictedTargetX: _predictedTarget.x,
+          predictedTargetZ: _predictedTarget.z,
+        };
+      }
+      return;
+    }
 
     // Lightweight local obstacle avoidance: three forward probes from the
     // police bumper. Steep hits (drivable terrain/slopes) are ignored; wall

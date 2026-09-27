@@ -172,6 +172,7 @@ export function WorldScene({
           playerBodyRef={playerBodyRef}
           policeBodyRef={policeBodyRef}
           policeControlsRef={vehicleControls.police}
+          policeTelemetryRef={policeTelemetryRef}
           telemetryRef={chaseTelemetryRef}
         />
         <VehicleLoadErrorBoundary onFail={onVehicleLoadFailed}>
