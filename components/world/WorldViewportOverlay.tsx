@@ -2,6 +2,7 @@
 
 import { useEffect, useState, type RefObject } from "react";
 import type { VehicleTelemetry } from "./vehicles/vehicleTypes";
+import type { ChaseTelemetry } from "./police/PoliceChaseController";
 
 interface WorldViewportOverlayProps {
   onResetView: () => void;
@@ -9,6 +10,7 @@ interface WorldViewportOverlayProps {
   onEnterDriveMode?: () => void;
   onExitDriveMode?: () => void;
   telemetryRef?: RefObject<VehicleTelemetry | null>;
+  chaseTelemetryRef?: RefObject<ChaseTelemetry | null>;
   sirenActive?: boolean;
   onToggleSiren?: () => void;
   muted?: boolean;
@@ -34,12 +36,36 @@ function useSpeedKmh(telemetryRef?: RefObject<VehicleTelemetry | null>): number 
   return speedKmh;
 }
 
+function usePoliceDistance(
+  chaseTelemetryRef?: RefObject<ChaseTelemetry | null>,
+): { distance: number; state: string } {
+  const [value, setValue] = useState({ distance: 0, state: "idle" });
+  useEffect(() => {
+    if (!chaseTelemetryRef) {
+      return;
+    }
+    let raf = 0;
+    const loop = () => {
+      const telemetry = chaseTelemetryRef.current;
+      setValue({
+        distance: Math.round(telemetry?.distanceToPlayer ?? 0),
+        state: telemetry?.state ?? "idle",
+      });
+      raf = requestAnimationFrame(loop);
+    };
+    raf = requestAnimationFrame(loop);
+    return () => cancelAnimationFrame(raf);
+  }, [chaseTelemetryRef]);
+  return value;
+}
+
 export function WorldViewportOverlay({
   onResetView,
   driveMode = false,
   onEnterDriveMode,
   onExitDriveMode,
   telemetryRef,
+  chaseTelemetryRef,
   sirenActive = false,
   onToggleSiren,
   muted = false,
@@ -48,6 +74,7 @@ export function WorldViewportOverlay({
   vehicleLoadFailed = false,
 }: WorldViewportOverlayProps) {
   const speedKmh = useSpeedKmh(telemetryRef);
+  const police = usePoliceDistance(chaseTelemetryRef);
   return (
     <div
       data-viewport-overlay
@@ -149,16 +176,32 @@ export function WorldViewportOverlay({
           )}
         </p>
         {driveMode && (
-          <div className="flex items-baseline gap-2">
-            <span className="text-[10px] uppercase tracking-[0.2em] text-zinc-500">
-              Speed
-            </span>
-            <span className="font-mono text-lg font-semibold tabular-nums text-zinc-100">
-              {speedKmh}
-            </span>
-            <span className="text-[10px] uppercase tracking-[0.2em] text-zinc-500">
-              km/h
-            </span>
+          <div className="flex items-baseline gap-3">
+            <div className="flex items-baseline gap-2">
+              <span className="text-[10px] uppercase tracking-[0.2em] text-zinc-500">
+                Speed
+              </span>
+              <span className="font-mono text-lg font-semibold tabular-nums text-zinc-100">
+                {speedKmh}
+              </span>
+              <span className="text-[10px] uppercase tracking-[0.2em] text-zinc-500">
+                km/h
+              </span>
+            </div>
+            <div className="flex items-baseline gap-2">
+              <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-accent">
+                {police.state === "recovery" ? "Recovery" : "Pursuit"}
+              </span>
+              <span className="text-[10px] uppercase tracking-[0.2em] text-zinc-500">
+                Police
+              </span>
+              <span className="font-mono text-lg font-semibold tabular-nums text-zinc-100">
+                {police.distance}
+              </span>
+              <span className="text-[10px] uppercase tracking-[0.2em] text-zinc-500">
+                m
+              </span>
+            </div>
           </div>
         )}
         {vehicleLoadFailed ? (

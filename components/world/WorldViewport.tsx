@@ -247,6 +247,7 @@ export function WorldViewport() {
             onEnterDriveMode={handleEnterDriveMode}
             onExitDriveMode={handleExitDriveMode}
             telemetryRef={playerTelemetryRef}
+            chaseTelemetryRef={chaseTelemetryRef}
             sirenActive={sirenActive}
             onToggleSiren={handleToggleSiren}
             muted={muted}
