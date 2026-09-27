@@ -172,7 +172,7 @@ export function MapEditorHeader({
             </p>
           ) : generation.phase === "worldReady" ? (
             <p className="text-[11px] text-emerald-400">
-              World ready. Enter drive mode to explore it.
+              World forged. Start the chase from the viewport.
             </p>
           ) : (
             <>

@@ -16,6 +16,7 @@ import { useWorldPipeline } from "./generation/WorldPipeline";
 import { useExperience } from "./game/ExperienceProvider";
 import type { GameRefs, GameWorldInfo } from "./game/experienceState";
 import { WorldViewportOverlay } from "./WorldViewportOverlay";
+import { GameOverlays } from "./game/GameOverlays";
 import { useVehicleKeyboard } from "./controls/useVehicleKeyboard";
 import { useVehicleAudio } from "./audio/useVehicleAudio";
 import { vehicleAudio } from "./audio/VehicleAudio";
@@ -452,6 +453,10 @@ export function WorldViewport() {
               onVehicleLoadFailed={handleVehicleLoadFailed}
             />
           </Canvas>
+          <GameOverlays
+            telemetryRef={playerTelemetryRef}
+            chaseTelemetryRef={chaseTelemetryRef}
+          />
           <WorldViewportOverlay
             onResetView={handleResetView}
             sandboxDrive={sandboxDrive}

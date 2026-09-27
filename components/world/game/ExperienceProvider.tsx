@@ -83,7 +83,9 @@ export function ExperienceProvider({ children }: ExperienceProviderProps) {
   const [introDismissed, setIntroDismissed] = useState(false);
 
   const gameRefsRef = useRef<GameRefs | null>(null);
-  const assetsReadyWorldIdRef = useRef<string | null>(null);
+  const [assetsReadyWorldId, setAssetsReadyWorldId] = useState<string | null>(
+    null,
+  );
   const playingStartedAtRef = useRef(0);
   const playingStartPositionRef = useRef<{
     x: number;
@@ -103,7 +105,7 @@ export function ExperienceProvider({ children }: ExperienceProviderProps) {
   }, []);
 
   const reportWorldAssetsReady = useCallback((worldId: string) => {
-    assetsReadyWorldIdRef.current = worldId;
+    setAssetsReadyWorldId(worldId);
   }, []);
 
   // Generation lifecycle → experience state.
@@ -128,13 +130,13 @@ export function ExperienceProvider({ children }: ExperienceProviderProps) {
       if (
         phase === "worldReady" &&
         generatedWorld &&
-        assetsReadyWorldIdRef.current === generatedWorld.worldId
+        assetsReadyWorldId === generatedWorld.worldId
       ) {
         setState("world-ready");
       }
     });
     return () => cancelAnimationFrame(id);
-  }, [phase, generatedWorld, state]);
+  }, [phase, generatedWorld, state, assetsReadyWorldId]);
 
   const resetVehiclesAndProgress = useCallback(() => {
     gameRefsRef.current?.playerVehicleRef.current?.reset();
