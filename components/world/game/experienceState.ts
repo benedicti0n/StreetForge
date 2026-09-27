@@ -32,11 +32,11 @@ export interface GameRefs {
 }
 
 /** Escape distance is derived from the playable world footprint. */
-export const ESCAPE_DISTANCE_FACTOR = 0.5;
-export const ESCAPE_DISTANCE_MIN = 35;
+export const ESCAPE_DISTANCE_FACTOR = 0.55;
+export const ESCAPE_DISTANCE_MIN = 40;
 export const ESCAPE_DISTANCE_MAX = 65;
 /** Time the player must stay beyond the escape distance to win. */
-export const ESCAPE_HOLD_SECONDS = 6;
+export const ESCAPE_HOLD_SECONDS = 8;
 /** Time for full escape progress to decay once the condition is lost. */
 export const ESCAPE_DECAY_SECONDS = 3;
 /** Player must be grounded, and moving or displaced, to earn escape progress. */
