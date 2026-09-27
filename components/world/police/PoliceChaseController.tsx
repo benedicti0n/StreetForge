@@ -53,7 +53,9 @@ export function PoliceChaseController({
 }: PoliceChaseControllerProps) {
   const stateRef = useRef<ChaseState>("idle");
   const smoothedSteeringRef = useRef(0);
-  const lastHeadingErrorRef = useRef(0);
+  const stuckTimerRef = useRef(0);
+  const recoveryTimerRef = useRef(0);
+  const recoverySteerSignRef = useRef<1 | -1>(1);
   const config = chaseConfig ?? POLICE_CHASE;
 
   useBeforePhysicsStep((stepWorld) => {
@@ -62,6 +64,8 @@ export function PoliceChaseController({
       Object.assign(policeControlsRef.current, IDLE_CONTROLS);
       stateRef.current = "idle";
       smoothedSteeringRef.current = 0;
+      stuckTimerRef.current = 0;
+      recoveryTimerRef.current = 0;
       if (telemetryRef) {
         telemetryRef.current = {
           state: "idle",
@@ -82,7 +86,6 @@ export function PoliceChaseController({
       return;
     }
 
-    stateRef.current = "pursuit";
     const dt = stepWorld.timestep;
 
     _policePosition.copy(police.translation() as unknown as Vector3);
@@ -118,14 +121,10 @@ export function PoliceChaseController({
 
     const desiredSteering = clamp(headingError * 2.2, -1, 1);
     const steeringRate = config.maxSteeringRate * dt;
-    const previous = smoothedSteeringRef.current;
-    smoothedSteeringRef.current = clamp(
-      desiredSteering - previous,
-      -steeringRate,
-      steeringRate,
-    ) + previous;
-    const steering = smoothedSteeringRef.current;
-    lastHeadingErrorRef.current = headingError;
+    const previousSteering = smoothedSteeringRef.current;
+    const steering =
+      clamp(desiredSteering - previousSteering, -steeringRate, steeringRate) +
+      previousSteering;
 
     const policeSpeed = Math.hypot(
       police.linvel().x,
@@ -139,55 +138,99 @@ export function PoliceChaseController({
     );
     const absError = Math.abs(headingError);
 
-    let desiredSpeed: number;
-    if (distance > config.farDistance) {
-      desiredSpeed = config.farCruiseSpeed;
-    } else if (distance > config.closeDistance) {
-      const t =
-        (distance - config.closeDistance) /
-        (config.farDistance - config.closeDistance);
-      desiredSpeed =
-        config.midCruiseSpeed +
-        (config.farCruiseSpeed - config.midCruiseSpeed) * t;
-    } else if (distance > config.veryCloseDistance) {
-      desiredSpeed = config.closeCruiseSpeed;
+    let state = stateRef.current;
+
+    if (state === "pursuit") {
+      let desiredSpeed: number;
+      if (distance > config.farDistance) {
+        desiredSpeed = config.farCruiseSpeed;
+      } else if (distance > config.closeDistance) {
+        const t =
+          (distance - config.closeDistance) /
+          (config.farDistance - config.closeDistance);
+        desiredSpeed =
+          config.midCruiseSpeed +
+          (config.farCruiseSpeed - config.midCruiseSpeed) * t;
+      } else if (distance > config.veryCloseDistance) {
+        desiredSpeed = config.closeCruiseSpeed;
+      } else {
+        desiredSpeed = config.veryCloseSpeed;
+      }
+      if (playerSpeed < 1.5 && distance < config.closeDistance) {
+        desiredSpeed = Math.min(desiredSpeed, config.stationaryApproachSpeed);
+      }
+
+      const errorSlowdown = 1 - clamp((absError - 0.4) / 1.4, 0, 0.65);
+      desiredSpeed *= errorSlowdown;
+
+      const throttleRequest = clamp((desiredSpeed - policeSpeed) / 8, 0.2, 1);
+
+      let throttle = 0;
+      let brake = 0;
+
+      if (absError > config.brakeError) {
+        if (policeSpeed < 4) {
+          throttle = config.recoveryReverseThrottle * 0.7;
+          brake = 0;
+        } else {
+          brake = 0.8;
+        }
+      } else if (policeSpeed < desiredSpeed - 0.5) {
+        throttle = throttleRequest;
+      } else if (policeSpeed > desiredSpeed + 1) {
+        brake = clamp((policeSpeed - desiredSpeed) / 6, 0.15, 0.7);
+      } else {
+        throttle = 0.12;
+      }
+
+      // Stuck detection: requesting throttle but barely moving.
+      if (
+        distance > config.stuckMinDistance &&
+        throttleRequest > 0.5 &&
+        policeSpeed < config.stuckSpeedThreshold
+      ) {
+        stuckTimerRef.current += dt;
+      } else {
+        stuckTimerRef.current = Math.max(0, stuckTimerRef.current - dt);
+      }
+
+      if (stuckTimerRef.current >= config.stuckTimeSeconds) {
+        state = "recovery";
+        stateRef.current = "recovery";
+        recoveryTimerRef.current = config.recoveryDurationSeconds;
+        stuckTimerRef.current = 0;
+        recoverySteerSignRef.current = Math.random() < 0.5 ? -1 : 1;
+      }
+
+      smoothedSteeringRef.current = steering;
+
+      Object.assign(policeControlsRef.current, {
+        ...NEUTRAL_CONTROLS,
+        throttle,
+        brake,
+        steering,
+      });
     } else {
-      desiredSpeed = config.veryCloseSpeed;
+      // RECOVERY: reverse briefly while steering away from the previous heading.
+      recoveryTimerRef.current -= dt;
+      if (recoveryTimerRef.current <= 0) {
+        state = "pursuit";
+        stateRef.current = "pursuit";
+        smoothedSteeringRef.current = 0;
+      }
+      Object.assign(policeControlsRef.current, {
+        ...NEUTRAL_CONTROLS,
+        throttle: config.recoveryReverseThrottle,
+        steering: recoverySteerSignRef.current,
+      });
     }
-    if (playerSpeed < 1.5 && distance < config.closeDistance) {
-      desiredSpeed = Math.min(desiredSpeed, config.stationaryApproachSpeed);
-    }
-
-    const errorSlowdown = 1 - clamp((absError - 0.4) / 1.4, 0, 0.65);
-    desiredSpeed *= errorSlowdown;
-
-    let throttle = 0;
-    let brake = 0;
-    if (absError > config.brakeError) {
-      brake = 0.8;
-    } else if (policeSpeed < desiredSpeed - 0.5) {
-      throttle = clamp((desiredSpeed - policeSpeed) / 8, 0.2, 1);
-    } else if (policeSpeed > desiredSpeed + 1) {
-      brake = clamp((policeSpeed - desiredSpeed) / 6, 0.15, 0.7);
-    } else {
-      throttle = 0.12;
-    }
-
-    Object.assign(policeControlsRef.current, {
-      ...NEUTRAL_CONTROLS,
-      throttle,
-      brake,
-      steering,
-    });
 
     if (telemetryRef) {
       telemetryRef.current = {
-        state: "pursuit",
+        state,
         distanceToPlayer: distance,
         headingError,
-        playerSpeedKmh:
-          Math.hypot(player.linvel().x, player.linvel().y, player.linvel().z) *
-          3.6,
+        playerSpeedKmh: playerSpeed * 3.6,
         policeSpeedKmh: policeSpeed * 3.6,
         predictedTargetX: _predictedTarget.x,
         predictedTargetZ: _predictedTarget.z,
