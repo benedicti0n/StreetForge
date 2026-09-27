@@ -77,7 +77,55 @@ export function GameOverlays({ telemetryRef, chaseTelemetryRef }: GameOverlaysPr
         </div>
       )}
 
-      {state === "playing" && <GoFlash reducedMotion={reduced} />}
+      {state === "playing" && (
+        <>
+          <GameplayHud
+            escapeProgress={experience.escapeProgress}
+            reducedMotion={reduced}
+          />
+          <GoFlash reducedMotion={reduced} />
+        </>
+      )}
+    </div>
+  );
+}
+
+function ProgressBar({ progress, className }: { progress: number; className?: string }) {
+  return (
+    <div
+      className={`h-1.5 w-full overflow-hidden rounded-full bg-black/40 ${className ?? ""}`}
+      role="progressbar"
+      aria-valuenow={Math.round(progress * 100)}
+      aria-valuemin={0}
+      aria-valuemax={100}
+    >
+      <div
+        className="h-full rounded-full transition-[width] duration-150 ease-out"
+        style={{
+          width: `${Math.min(100, Math.max(0, progress * 100))}%`,
+        }}
+      />
+    </div>
+  );
+}
+
+function GameplayHud({
+  escapeProgress,
+  reducedMotion: _reducedMotion,
+}: {
+  escapeProgress: number;
+  reducedMotion: boolean;
+}) {
+  const showEscape = escapeProgress > 0.04;
+  if (!showEscape) {
+    return null;
+  }
+  return (
+    <div className="absolute inset-x-0 bottom-14 flex flex-col items-center gap-1.5 px-6">
+      <p className="text-[10px] font-bold uppercase tracking-[0.35em] text-emerald-300">
+        Get Away
+      </p>
+      <ProgressBar progress={escapeProgress} className="max-w-[260px]" />
     </div>
   );
 }
