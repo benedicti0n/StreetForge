@@ -301,6 +301,35 @@ export async function parseSketch(dataUrl: string): Promise<ParsedSketch> {
     }
   }
 
+  // Antialiased edges of colored strokes dilute toward neutral gray and
+  // would otherwise leak into the building mask as noise. Dilate the
+  // strong-color masks and subtract them from the gray mask.
+  for (const strongMask of [masks.water, masks.vegetation, masks.road]) {
+    const dilated = new Uint8Array(grid * grid);
+    for (let y = 0; y < grid; y++) {
+      for (let x = 0; x < grid; x++) {
+        if (strongMask[y * grid + x] === 0) {
+          continue;
+        }
+        for (let dy = -1; dy <= 1; dy++) {
+          for (let dx = -1; dx <= 1; dx++) {
+            const nx = x + dx;
+            const ny = y + dy;
+            if (nx < 0 || ny < 0 || nx >= grid || ny >= grid) {
+              continue;
+            }
+            dilated[ny * grid + nx] = 1;
+          }
+        }
+      }
+    }
+    for (let i = 0; i < grid * grid; i++) {
+      if (dilated[i] === 1) {
+        masks.building[i] = 0;
+      }
+    }
+  }
+
   const road = connectedComponents(masks.road, grid);
   const building = connectedComponents(masks.building, grid);
   const water = connectedComponents(masks.water, grid);
