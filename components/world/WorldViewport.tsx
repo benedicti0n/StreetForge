@@ -104,10 +104,14 @@ export function WorldViewport() {
   const handleEnterDriveMode = useCallback(() => {
     vehicleAudio.unlock();
     setDriveMode(true);
+    setSirenActive(true);
+    vehicleAudio.setSirenActive(true);
   }, []);
 
   const handleExitDriveMode = useCallback(() => {
     setDriveMode(false);
+    setSirenActive(false);
+    vehicleAudio.setSirenActive(false);
   }, []);
 
   const handleToggleSiren = useCallback(() => {
@@ -200,7 +204,13 @@ export function WorldViewport() {
       ref={viewportRef}
       aria-label="3D world viewport"
       className="relative h-full min-h-0 w-full overflow-hidden bg-background"
-      onPointerDown={handleEnterDriveMode}
+      onPointerDown={(event) => {
+        const target = event.target as HTMLElement | null;
+        if (target?.closest("[data-viewport-overlay]")) {
+          return;
+        }
+        handleEnterDriveMode();
+      }}
     >
       {webglAvailable === false ? (
         <ViewportUnavailable />

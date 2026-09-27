@@ -49,7 +49,10 @@ export function WorldViewportOverlay({
 }: WorldViewportOverlayProps) {
   const speedKmh = useSpeedKmh(telemetryRef);
   return (
-    <div className="pointer-events-none absolute inset-0 z-10 flex flex-col justify-between p-3">
+    <div
+      data-viewport-overlay
+      className="pointer-events-none absolute inset-0 z-10 flex flex-col justify-between p-3"
+    >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="text-[11px] font-semibold uppercase tracking-[0.3em] text-zinc-400">
@@ -60,38 +63,38 @@ export function WorldViewportOverlay({
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-2">
-          {driveMode && (
-            <>
-              <button
-                type="button"
-                onClick={(event) => {
-                  event.stopPropagation();
-                  onToggleSiren?.();
-                }}
-                aria-label={
-                  sirenActive ? "Stop the police siren" : "Start the police siren"
-                }
-                className={`pointer-events-auto rounded-md border px-3 py-1.5 text-[11px] font-medium uppercase tracking-[0.15em] transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent ${
-                  sirenActive
-                    ? "border-red-700 bg-red-950/60 text-red-300 hover:border-red-600"
-                    : "border-edge bg-panel-raised/90 text-zinc-300 hover:border-zinc-600 hover:text-zinc-100"
-                }`}
-              >
-                Siren
-              </button>
-              <button
-                type="button"
-                onClick={(event) => {
-                  event.stopPropagation();
-                  onToggleMute?.();
-                }}
-                aria-label={muted ? "Unmute vehicle audio" : "Mute vehicle audio"}
-                className="pointer-events-auto rounded-md border border-edge bg-panel-raised/90 px-3 py-1.5 text-[11px] font-medium uppercase tracking-[0.15em] text-zinc-300 transition-colors hover:border-zinc-600 hover:text-zinc-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
-              >
-                {muted ? "Sound" : "Mute"}
-              </button>
-            </>
-          )}
+          <button
+            type="button"
+            onClick={(event) => {
+              event.stopPropagation();
+              onToggleSiren?.();
+            }}
+            disabled={driveMode}
+            aria-label={
+              sirenActive
+                ? "Police siren is active"
+                : "Start the police siren"
+            }
+            title={driveMode ? "Siren runs automatically during pursuit" : undefined}
+            className={`pointer-events-auto rounded-md border px-3 py-1.5 text-[11px] font-medium uppercase tracking-[0.15em] transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent ${
+              sirenActive
+                ? "border-red-700 bg-red-950/60 text-red-300"
+                : "border-edge bg-panel-raised/90 text-zinc-300 hover:border-zinc-600 hover:text-zinc-100 disabled:cursor-not-allowed disabled:opacity-50"
+            }`}
+          >
+            Siren
+          </button>
+          <button
+            type="button"
+            onClick={(event) => {
+              event.stopPropagation();
+              onToggleMute?.();
+            }}
+            aria-label={muted ? "Unmute vehicle audio" : "Mute vehicle audio"}
+            className="pointer-events-auto rounded-md border border-edge bg-panel-raised/90 px-3 py-1.5 text-[11px] font-medium uppercase tracking-[0.15em] text-zinc-300 transition-colors hover:border-zinc-600 hover:text-zinc-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+          >
+            {muted ? "Sound" : "Mute"}
+          </button>
           {driveMode ? (
             <>
               <span className="rounded-md border border-accent/40 bg-accent/10 px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-[0.2em] text-accent">
