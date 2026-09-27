@@ -149,6 +149,11 @@ export function parseNormalizedMap(
   classes: Uint8Array,
   grid: number,
 ): NormalizedWorldLayout {
+  // Class indices MUST stay in sync with SEMANTIC_CLASSES order in
+  // palette.ts (the quantizer writes palette order): road=1, shoulder=2,
+  // water=3, building=4, vegetation=5, ramp=6. RED pixels are quantized to
+  // "building" and ORANGE/YELLOW to "ramp" by hue rules in the quantizer,
+  // so a red component can never arrive here as a ramp.
   const classIndex = {
     road: 1,
     shoulder: 2,

@@ -47,7 +47,7 @@ WATER:
 #3388DD
 
 BUILDING:
-#9A9DA3
+#D64545
 
 VEGETATION:
 #397B3B
@@ -62,12 +62,19 @@ Interpret the rough drawing intelligently:
 
 * road outlines or road-like strokes become one continuous filled ROAD surface
 * preserve the road's approximate shape and turns
-* rough gray rectangles become BUILDING footprints
+* RED rectangles/blocks become BUILDING footprints
 * blue waves/scribbles become WATER areas
 * green scribbles become VEGETATION regions
 * triangles or obvious stunt-ramp marks become RAMP footprints
-* orange or reddish-orange rectangles/blocks become RAMP footprints (do not drop them into terrain or road)
+* ORANGE or YELLOW rectangles/blocks become RAMP footprints (do not drop them into terrain or road)
 * unclear tiny marks should be ignored instead of invented into objects
+
+COLOR RULES (strict):
+
+* BUILDINGS are always RED (#D64545)
+* RAMPS are always ORANGE or YELLOW (#E99A28)
+* never paint a ramp red, and never paint a building orange
+* a red box is a building, an orange/yellow box is a ramp
 
 The ROAD must be:
 

@@ -7,7 +7,7 @@ export const SEMANTIC_PALETTE = {
   road: "#303238",
   shoulder: "#B8A272",
   water: "#3388DD",
-  building: "#9A9DA3",
+  building: "#D64545",
   vegetation: "#397B3B",
   ramp: "#E99A28",
 } as const;
